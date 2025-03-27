@@ -1,0 +1,57 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch GPT",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "example:gpt"
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        },
+        {
+            "name": "Launch ernie",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "example:ernie"
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        },
+        {
+            "name": "Launch deepseek",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "example:deepseek"
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        },
+        {
+            "name": "Launch Jest",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "test",
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        }
+    ]
+}
