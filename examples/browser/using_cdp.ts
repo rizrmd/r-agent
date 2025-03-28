@@ -43,6 +43,9 @@ async function main() {
     {
       controller,
       browser,
+      initialActions: [{
+        'go_to_url': {url: 'https://www.baidu.com'}
+      }],
     });
 
   await agent.run();

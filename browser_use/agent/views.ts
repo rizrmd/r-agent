@@ -122,7 +122,9 @@ export const AgentBrainSchema = z.object({
   evaluation_previous_goal: z.string(),
   memory: z.string(),
   next_goal: z.string(),
-})
+}, {
+  description: 'Current state of the agent'
+});
 
 export type AgentBrain = z.infer<typeof AgentBrainSchema>;
 

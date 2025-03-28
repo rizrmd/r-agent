@@ -15,10 +15,11 @@
   },
   "homepage": "https://github.com/kekee000/browser-use-play",
   "scripts": {
-    "build": "rm -rf dist/* && tsc && cp -rf browser_use/dom/*.js dist/browser_use/dom",
+    "build": "find ./dist -name '*.d.ts' | xargs rm -f && tsc && cp -rf browser_use/dom/*.js dist/browser_use/dom",
     "example:gpt": "npm run build && node dist/examples/models/gpt-4o.js",
     "example:ernie": "npm run build && node dist/examples/models/ernie4.js",
     "example:deepseek": "npm run build && node dist/examples/models/deepseek.js",
+    "example:qwen": "npm run build && node dist/examples/models/qwen.js",
     "test": "jest --runInBand"
   },
   "keywords": [],

@@ -11,8 +11,7 @@ dotenv.config();
 
 // Initialize LLM
 const llm = new ChatQianfan({
-  modelName: 'deepseek-v3',
-  // model_name: 'deepseek-r1',
+  modelName: 'qwq-32b',
   apiKey: process.env.QIANFAN_API_KEY,
   baseUrl: process.env.QIANFAN_API_BASE,
 });
@@ -23,9 +22,9 @@ const agent = new Agent(
   llm,
   {
     useVision: false,
-		maxFailures: 2,
-		maxActionsPerStep: 1,
-    toolCallingMethod: 'auto'
+    maxFailures: 2,
+    maxActionsPerStep: 1,
+    toolCallingMethod:  'raw',
   }
 );
 

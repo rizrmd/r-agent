@@ -41,6 +41,19 @@
             "type": "node"
         },
         {
+            "name": "Launch qwen",
+            "request": "launch",
+            "runtimeArgs": [
+                "run",
+                "example:qwen"
+            ],
+            "runtimeExecutable": "npm",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "node"
+        },
+        {
             "name": "Launch Jest",
             "request": "launch",
             "runtimeArgs": [

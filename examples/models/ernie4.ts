@@ -1,7 +1,5 @@
 /**
  * Simple try of the agent.
- *
- * @dev You need to add OPENAI_API_KEY to your environment variables.
  */
 
 import * as dotenv from 'dotenv';

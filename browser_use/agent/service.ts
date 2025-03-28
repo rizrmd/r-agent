@@ -498,7 +498,7 @@ class Agent<Context> {
   }
 
   private convertInputMessages(inputMessages: BaseMessage[]): any[] {
-    if (this.toolCallingMethod === 'raw' || this.modelName === 'deepseek-reasoner' || this.modelName.includes('deepseek-r1') || this.modelName.includes('deepseek-v3')) {
+    if (this.modelName === 'deepseek-reasoner' || this.modelName.includes('deepseek-r1') || this.modelName.includes('deepseek-v3')) {
       return convertInputMessages(inputMessages, this.modelName, true);
     } else {
       return inputMessages;
