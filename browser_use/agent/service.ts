@@ -518,13 +518,15 @@ class Agent<Context> {
         logger.warn(`Failed to parse model output: ${output} ${e}`);
         throw new Error('Could not parse response.');
       }
-    } else if (this.toolCallingMethod === null) {
+    } else if (this.toolCallingMethod == null) {
       const structuredLlm = this.llm.withStructuredOutput(this.createAgentOutputTool(), { includeRaw: true });
-      logger.log('getNextAction', inputMessages);
+      if (logger.isDebugEnabled()) {
+        logger.debug('getNextAction', inputMessages);
+      }
       const response = await structuredLlm.invoke(inputMessages);
-      const parsed = response;
+      const parsed = response.data;
 
-      if (!parsed) {
+      if (!response.success || !parsed) {
         throw new Error('Could not parse response.');
       }
 
@@ -692,7 +694,7 @@ class Agent<Context> {
     for (let i = 0; i < actions.length; i++) {
       const action = actions[i];
 
-      if (getActionIndex(action) !== null && i !== 0) {
+      if (getActionIndex(action) != null && i !== 0) {
         const newState = await this.browserContext?.get_state();
         const newPathHashes = new Set(
           Array.from(Object.values(newState?.selector_map || {})).map(e => e.hash.branch_path_hash)
@@ -897,7 +899,7 @@ class Agent<Context> {
 
       if (!historyItem.modelOutput ||
         !historyItem.modelOutput.action ||
-        historyItem.modelOutput.action[0] === null) {
+        historyItem.modelOutput.action[0] == null) {
         logger.warn(`Step ${i + 1}: No action to replay, skipping`);
         results.push({ error: 'No action to replay', include_in_memory: true, is_done: false });
         continue;
@@ -944,7 +946,7 @@ class Agent<Context> {
       );
       updatedActions.push(updatedAction);
 
-      if (updatedAction === null) {
+      if (updatedAction == null) {
         throw new Error(`Could not find matching element ${i} in current page`);
       }
     }
@@ -965,7 +967,7 @@ class Agent<Context> {
 
     const currentElement = this.findHistoryElementInTree(historicalElement, currentState.element_tree);
 
-    if (!currentElement || currentElement.highlightIndex === null) {
+    if (!currentElement || currentElement.highlightIndex == null) {
       return null;
     }
 

@@ -42,6 +42,28 @@ const agent = new Agent(
 await agent.run(10);
 ```
 
+### Chat with your browser using ollama
+Here are some examples of how to use browser-use-play:
+```javascript
+import { ChatOllama } from 'browser-use-play';
+import { Agent } from 'browser-use-play';
+
+// Initialize LLM
+const llm = new ChatOllama({
+  modelName: 'gpt-4o',
+  apiKey: process.env.OPENAI_API_KEY,
+  baseUrl: process.env.OPENAI_API_BASE
+});
+
+// Initialize agent
+const agent = new Agent(
+  'Go to hackernews show hn and give me the first  5 posts',
+  llm
+);
+// max_steps=10
+await agent.run(10);
+```
+
 ### Chat with your browser using ernie4.0
 Here are some examples of how to use browser-use-play:
 ```javascript
@@ -72,11 +94,12 @@ await agent.run(10);
 ```
 
 ## Environment Variables
-To use browser-use-play, you need to set the following environment variables:
+To use browser-use-play, you can to set the following environment variables:
 - `OPENAI_API_KEY`: Your OpenAI API key.
 - `OPENAI_API_BASE`: Your OpenAI API base url.
 - `QIANFAN_API_KEY`: Your Qianfan API key.
 - `QIANFAN_API_BASE`: Your Qianfan API base url.
+- `OLLAMA_API_BASE`: Your Ollama API base url.
 
 copy .env.example to .env and fill in the variables.
 

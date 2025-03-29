@@ -27,8 +27,8 @@ export class DOMTextNode extends DOMBaseNode {
 
   has_parent_with_highlight_index(): boolean {
     let current = this.parent;
-    while (current !== null) {
-      if (current.highlight_index !== null) {
+    while (current != null) {
+      if (current.highlight_index != null) {
         return true;
       }
       current = current.parent;
@@ -70,7 +70,7 @@ export class DOMElementNode extends DOMBaseNode {
     is_top_element?: boolean;
     is_in_viewport?: boolean;
     shadow_root?: boolean;
-    highlight_index?: number;
+    highlight_index?: number | null;
     parent?: DOMElementNode;
     viewport_coordinates?: CoordinateSet;
     page_coordinates?: CoordinateSet;
@@ -85,7 +85,7 @@ export class DOMElementNode extends DOMBaseNode {
     this.is_top_element = params.is_top_element || false;
     this.is_in_viewport = params.is_in_viewport || false;
     this.shadow_root = params.shadow_root || false;
-    this.highlight_index = params.highlight_index || 0;
+    this.highlight_index = params.highlight_index ?? null;
     this.viewport_coordinates = params.viewport_coordinates ?? null;
     this.page_coordinates = params.page_coordinates ?? null;
     this.viewport_info = params.viewport_info ?? null;
@@ -103,7 +103,7 @@ export class DOMElementNode extends DOMBaseNode {
     if (this.is_interactive) extras.push('interactive');
     if (this.is_top_element) extras.push('top');
     if (this.shadow_root) extras.push('shadow-root');
-    if (this.highlight_index !== null) extras.push(`highlight:${this.highlight_index}`);
+    if (this.highlight_index != null) extras.push(`highlight:${this.highlight_index}`);
     if (this.is_in_viewport) extras.push('in-viewport');
 
     if (extras.length) {
@@ -128,7 +128,7 @@ export class DOMElementNode extends DOMBaseNode {
         return;
       }
 
-      if (node instanceof DOMElementNode && node !== this && node.highlight_index !== null) {
+      if (node instanceof DOMElementNode && node !== this && node.highlight_index != null) {
         return;
       }
 
@@ -149,7 +149,7 @@ export class DOMElementNode extends DOMBaseNode {
 
     const process_node = (node: DOMBaseNode, depth: number): void => {
       if (node instanceof DOMElementNode) {
-        if (node.highlight_index !== null) {
+        if (node.highlight_index != null) {
           let attributes_str = '';
           const text = node.get_all_text_till_next_clickable_element();
 

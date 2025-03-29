@@ -27,7 +27,6 @@ export class ChatQianfan extends BaseChatModel {
 
     formatMessages(rawMessages: BaseMessage[], tool: StructedTool): RequestParams {
         const messages: Message[] = [];
-        let lastMsg: Message | undefined;
         for (const m of rawMessages) {
             const newMsg: Message = {
                 role: 'user',
@@ -54,6 +53,7 @@ export class ChatQianfan extends BaseChatModel {
             }
 
             // 适配 千帆 不支持连续对话的问题
+            const lastMsg = messages[messages.length - 1];
             if (lastMsg?.role === newMsg.role) {
                 if (Array.isArray(newMsg.content) && Array.isArray(lastMsg.content)) {
                     lastMsg.content.push(...newMsg.content);
@@ -62,7 +62,7 @@ export class ChatQianfan extends BaseChatModel {
                 else if (Array.isArray(newMsg.content) && typeof lastMsg.content === 'string') {
                     newMsg.content[0].text = lastMsg.content + newMsg.content[0].text;
                     messages.pop();
-                    messages.push(lastMsg = newMsg);
+                    messages.push(newMsg);
                     continue;
                 }
                 else if (typeof newMsg.content === 'string') {
@@ -72,20 +72,20 @@ export class ChatQianfan extends BaseChatModel {
                     }
                 }
             }
-            messages.push(lastMsg = newMsg);
+            messages.push(newMsg);
             // tool 后面加一个 assistant 消息
             if (newMsg.role === 'tool') {
                 const assistantMsg = {
                     role: 'assistant',
                     content: '',
                 };
-                messages.push(lastMsg = assistantMsg);
+                messages.push(assistantMsg);
             }
         }
         return {messages, ...(tool ? formatTools([tool]):{})};
     }
 
-    async request(options: RequestParams) {
+    async request(params: RequestParams) {
         const url = `${this.baseUrl}/chat/completions`;
         const auth = `Bearer ${this.apiKey}`;
         const headers = {
@@ -93,7 +93,7 @@ export class ChatQianfan extends BaseChatModel {
             'Authorization': auth
         };
         const body = JSON.stringify({
-            ...options,
+            ...params,
             model: this.model_name,
         });
         const response = await fetch(url, {

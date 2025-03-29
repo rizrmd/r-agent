@@ -67,7 +67,7 @@ export class DomService {
     if (debug_mode && eval_page.perfMetrics) {
       logger.debug(
         'DOM Tree Building Performance Metrics:\n' +
-        JSON.stringify(eval_page.perfMetrics, null, 2)
+        JSON.stringify(eval_page.perfMetrics)
       );
     }
 
@@ -91,7 +91,7 @@ export class DomService {
 
       node_map[id] = node;
 
-      if (node instanceof DOMElementNode && node.highlight_index !== undefined) {
+      if (node instanceof DOMElementNode && node.highlight_index != null) {
         selector_map[node.highlight_index!] = node;
       }
 
@@ -155,7 +155,7 @@ export class DomService {
       is_interactive: node_data.isInteractive ?? false,
       is_top_element: node_data.isTopElement ?? false,
       is_in_viewport: node_data.isInViewport ?? false,
-      highlight_index: node_data.highlightIndex,
+      highlight_index: node_data.highlightIndex ?? null,
       shadow_root: node_data.shadowRoot ?? false,
       viewport_info: viewport_info,
     });

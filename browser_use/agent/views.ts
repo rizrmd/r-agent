@@ -327,7 +327,7 @@ export class AgentHistoryList {
   }
 
   has_errors(): boolean {
-    return this.errors().some(error => error !== null);
+    return this.errors().some(error => error != null);
   }
 
   urls(): (string | null)[] {

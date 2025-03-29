@@ -8,3 +8,4 @@ export { Browser } from './browser/browser';
 export { BaseChatModel, Message } from "./models/langchain";
 export { ChatOpenAI } from './models/openai';
 export { ChatQianfan } from './models/qianfan';
+export { ChatOllama } from './models/ollama';

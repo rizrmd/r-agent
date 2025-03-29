@@ -44,7 +44,7 @@ export class HistoryTreeProcessor {
     const hashed_dom_history_element = HistoryTreeProcessor._hash_dom_history_element(dom_history_element);
 
     const process_node = (node: DOMElementNode): DOMElementNode | null => {
-      if (node.highlight_index !== null) {
+      if (node.highlight_index != null) {
         const hashed_node = HistoryTreeProcessor._hash_dom_element(node);
         if (isHashDomHistorySame(hashed_node, hashed_dom_history_element)) {
           return node;
@@ -54,7 +54,7 @@ export class HistoryTreeProcessor {
       for (const child of node.children) {
         if (child instanceof DOMElementNode) {
           const result = process_node(child);
-          if (result !== null) {
+          if (result != null) {
             return result;
           }
         }
@@ -98,7 +98,7 @@ export class HistoryTreeProcessor {
     const parents: DOMElementNode[] = [];
     let current_element: DOMElementNode | null = dom_element;
 
-    while (current_element.parent !== null) {
+    while (current_element.parent != null) {
       parents.push(current_element);
       current_element = current_element.parent;
     }

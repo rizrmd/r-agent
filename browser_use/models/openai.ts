@@ -22,7 +22,7 @@ export function formatToolCall(additional: Message['additional_kwargs']): any[] 
     return tool_calls;
 }
 
-export function formatTools(rawTools: StructedTool[]): {tools: any[], tool_choice?: any} | {} {
+export function formatTools(rawTools: StructedTool[]): {tools?: any[], tool_choice?: any} {
     if (!rawTools?.length) {
         return {};
     }
@@ -95,7 +95,7 @@ export class ChatOpenAI extends BaseChatModel {
         return {messages, ...(tool ? formatTools([tool]):{})};
     }
 
-    async request(options: RequestParams) {
+    async request(params: RequestParams) {
         const url = `${this.baseUrl}/chat/completions`;
         const auth = `Bearer ${this.apiKey}`;
         const headers = {
@@ -103,7 +103,7 @@ export class ChatOpenAI extends BaseChatModel {
             'Authorization': auth
         };
         const body = JSON.stringify({
-            ...options,
+            ...params,
             model: this.model_name,
         });
         const response = await fetch(url, {

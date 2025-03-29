@@ -33,7 +33,7 @@ export class Controller<T extends Context = Context> {
     this.registry = new Registry<T>(excludeActions);
 
     // Register all default browser actions
-    if (outputModel !== null) {
+    if (outputModel != null) {
       // Create a new model that extends the output model with success parameter
       const ExtendedOutputModel = z.object({
         success: z.boolean(),
@@ -309,14 +309,14 @@ export class Controller<T extends Context = Context> {
       paramsSchema: ScrollAction,
       func: async (params: z.infer<typeof ScrollAction>, ctx: ActionRunContext) => {
         const page = await ctx.browser.get_current_page();
-        if (params.amount !== null) {
+        if (params.amount != null) {
           await page.evaluate(`window.scrollBy(0, ${params.amount});`);
         } else {
           await page.evaluate("window.scrollBy(0, window.innerHeight);");
         }
 
         const amount =
-          params.amount !== null ? `${params.amount} pixels` : "one page";
+          params.amount != null ? `${params.amount} pixels` : "one page";
         const msg = `🔍  Scrolled down the page by ${amount}`;
         logger.info(msg);
         return ({
@@ -333,14 +333,14 @@ export class Controller<T extends Context = Context> {
       paramsSchema: ScrollAction,
       func: async (params: z.infer<typeof ScrollAction>, ctx: ActionRunContext) => {
         const page = await ctx.browser.get_current_page();
-        if (params.amount !== null) {
+        if (params.amount != null) {
           await page.evaluate(`window.scrollBy(0, -${params.amount});`);
         } else {
           await page.evaluate("window.scrollBy(0, -window.innerHeight);");
         }
 
         const amount =
-          params.amount !== null ? `${params.amount} pixels` : "one page";
+          params.amount != null ? `${params.amount} pixels` : "one page";
         const msg = `🔍  Scrolled up the page by ${amount}`;
         logger.info(msg);
         return ({
@@ -681,7 +681,7 @@ export class Controller<T extends Context = Context> {
     try {
 
       for (const [actionName, params] of Object.entries(actionData)) {
-        if (params !== null) {
+        if (params != null) {
           // Commented out Laminar instrumentation
           // with Laminar.start_as_current_span(
           //   name=action_name,

@@ -30,7 +30,6 @@ const agent = new Agent(
 // Main function
 async function main(): Promise<void> {
   console.debug("test browser-use");
-  // testChatServiceConnection();
 
   await agent.run(10); // max_steps=10
 

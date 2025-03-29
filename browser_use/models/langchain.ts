@@ -115,14 +115,14 @@ export class BaseChatModel {
         return {
             async invoke<T = any>(rawMessages: BaseMessage[]): Promise<T> {
                 const message = await self.request(self.formatMessages(rawMessages, tool));
-                if (options?.method === 'function_calling') {
-                    const toolCallStr = message.tool_calls?.[0]?.function?.arguments || message.content;
-                    if (!toolCallStr) {
+                if (message.tool_calls || options?.method === 'function_calling') {
+                    const args = message.tool_calls?.[0]?.function?.arguments || message.content;
+                    if (!args) {
                         return null;
                     }
-                    return tool.schema.safeParse(JSON.parse(toolCallStr)) as T;
+                    return tool.schema.safeParse(typeof args === 'string' ? JSON.parse(args) : args) as T;
                 }
-                return tool.schema.safeParse(message.content) as T;
+                return tool.schema.safeParse(JSON.parse(message.content)) as T;
             }
         }
     }

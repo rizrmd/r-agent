@@ -526,8 +526,8 @@
       interactiveElements.has(tagName) ||
       interactiveRoles.has(role) ||
       interactiveRoles.has(ariaRole) ||
-      (tabIndex !== null &&
-        tabIndex !== "-1" &&
+      (tabIndex != null &&
+        +tabIndex !== -1 &&
         element.parentElement?.tagName.toLowerCase() !== "body") ||
       element.getAttribute("data-action") === "a-dropdown-select" ||
       element.getAttribute("data-action") === "a-dropdown-button";
@@ -577,8 +577,8 @@
 
     // Check for event listeners
     const hasClickHandler =
-      element.onclick !== null ||
-      element.getAttribute("onclick") !== null ||
+      element.onclick != null ||
+      element.getAttribute("onclick") != null ||
       element.hasAttribute("ng-click") ||
       element.hasAttribute("@click") ||
       element.hasAttribute("v-on:click");

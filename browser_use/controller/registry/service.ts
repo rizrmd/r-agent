@@ -90,7 +90,7 @@ export class Registry<Context> {
       if (Array.isArray(value)) {
         return value.map(replace_secrets);
       }
-      if (typeof value === 'object' && value !== null) {
+      if (typeof value === 'object' && value != null) {
         return Object.fromEntries(
           Object.entries(value).map(([k, v]) => [k, replace_secrets(v)])
         );

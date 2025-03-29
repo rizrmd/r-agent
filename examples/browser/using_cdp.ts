@@ -12,7 +12,7 @@
  */
 
 import * as dotenv from 'dotenv';
-import { ChatOpenAI } from '../../browser_use';
+import { ChatOllama } from '../../browser_use';
 
 import { Agent, Controller } from '../../browser_use';
 import { Browser } from '../../browser_use/browser/browser';
@@ -28,13 +28,14 @@ const browser = new Browser({
 const controller = new Controller();
 
 async function main() {
-  let task = 'In docs.google.com write my Papa a quick thank you for everything letter \n - Magnus';
-  task += ' and save the document as pdf';
+  let task = '打开百度搜索 北京春游，并总结搜索结果';
 
-  const llm = new ChatOpenAI({
-    modelName: 'gpt-4o',
-    apiKey: process.env.OPENAI_API_KEY,
-    baseUrl: process.env.OPENAI_API_BASE
+  const llm = new ChatOllama({
+    modelName: 'qwen2.5:32b',
+    baseUrl: process.env.OLLAMA_API_BASE,
+    options: {
+      num_ctx: 32000,
+    }
   });
 
   const agent = new Agent(

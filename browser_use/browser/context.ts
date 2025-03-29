@@ -166,7 +166,7 @@ class BrowserContext {
     logger.debug('Closing browser context');
 
     try {
-      if (this.session === null) {
+      if (this.session == null) {
         return;
       }
 
@@ -292,7 +292,7 @@ class BrowserContext {
       }
       await page.waitForLoadState();
       logger.debug(`New page opened: ${page.url()}`);
-      if (this.session !== null) {
+      if (this.session != null) {
         this.state.target_id = null;
       }
     };
@@ -305,7 +305,7 @@ class BrowserContext {
     /**
      * Lazy initialization of the browser and related components
      */
-    if (this.session === null) {
+    if (this.session == null) {
       return await this._initialize_session();
     }
     return this.session;
@@ -1117,7 +1117,7 @@ try {
     // 从目标元素开始，收集所有父元素
     const parents: DOMElementNode[] = [];
     let current = element;
-    while (current.parent !== null) {
+    while (current.parent != null) {
       const parent = current.parent;
       parents.push(parent);
       current = parent;
@@ -1169,7 +1169,7 @@ try {
     try {
       const element_handle = await this.get_locate_element(element_node);
 
-      if (element_handle === null) {
+      if (element_handle == null) {
         throw new BrowserError(`元素: ${element_node} 未找到`);
       }
 
@@ -1210,7 +1210,7 @@ try {
 
     try {
       // Highlight before clicking
-      // if (elementNode.highlightIndex !== null) {
+      // if (elementNode.highlightIndex != null) {
       //   await this._updateState({ focusElement: elementNode.highlightIndex });
       // }
 
@@ -1579,7 +1579,7 @@ try {
   }
   async get_selector_map(): Promise<SelectorMap> {
     const session = await this.get_session();
-    if (session.cached_state === null) {
+    if (session.cached_state == null) {
       return {};
     }
     return session.cached_state.selector_map;

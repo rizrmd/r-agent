@@ -3,28 +3,28 @@
  */
 
 import * as dotenv from 'dotenv';
-import { ChatQianfan } from '../../browser_use';
+import { ChatOllama } from '../../browser_use';
 import { Agent } from '../../browser_use';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize LLM
-const llm = new ChatQianfan({
-  modelName: 'qwq-32b',
-  apiKey: process.env.QIANFAN_API_KEY,
-  baseUrl: process.env.QIANFAN_API_BASE,
+const llm = new ChatOllama({
+  modelName: 'qwen2.5:32b',
+  baseUrl: process.env.OLLAMA_API_BASE,
+  options: {
+    num_ctx: 32000,
+  }
 });
 
 // Initialize agent
 const agent = new Agent(
-  'Go to hackernews show hn and give me the first  5 posts',
+  'Search for \'playwright\' package on the npm repo, open it and summarize the package info.',
   llm,
   {
-    useVision: false,
     maxFailures: 2,
     maxActionsPerStep: 1,
-    toolCallingMethod:  'raw',
   }
 );
 

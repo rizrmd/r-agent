@@ -42,7 +42,7 @@ export class ProductTelemetry {
       this._posthog_client = new PostHog();
     }
 
-    if (this._posthog_client === null) {
+    if (this._posthog_client == null) {
       logger.debug('Telemetry disabled');
     }
   }
@@ -55,7 +55,7 @@ export class ProductTelemetry {
   }
 
   public capture(event: BaseTelemetryEvent): void {
-    if (this._posthog_client === null) {
+    if (this._posthog_client == null) {
       return;
     }
 
@@ -66,7 +66,7 @@ export class ProductTelemetry {
   }
 
   private _direct_capture(event: BaseTelemetryEvent): void {
-    if (this._posthog_client === null) {
+    if (this._posthog_client == null) {
       return;
     }
 
