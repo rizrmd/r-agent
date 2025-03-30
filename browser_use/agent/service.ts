@@ -12,7 +12,7 @@ import { BaseChatModel, BaseMessage, HumanMessage, SystemMessage } from '../mode
 import { PlannerPrompt, AgentMessagePrompt, SystemPrompt } from './prompts';
 import { ProductTelemetry } from '../telemetry/service';
 import z from 'zod';
-import { ActionModel, getActionIndex } from '../controller/registry/views';
+import { ActionModel, getActionIndex, setActionIndex } from '../controller/registry/views';
 import { Logger } from '../utils';
 import { convertInputMessages } from './message_manager/utils';
 
@@ -36,9 +36,10 @@ class Agent<Context> {
   private injectedBrowserContext: boolean;
   private browser?: Browser;
   private browserContext?: BrowserContext;
-  private registerNewStepCallback?: (state: BrowserState, modelOutput: AgentOutput, step: number) => Promise<void>;
-  private registerDoneCallback?: (history: any) => Promise<void>;
-  private registerExternalAgentStatusRaiseErrorCallback?: () => Promise<boolean>;
+  private registerNewStepCallback?: (state: BrowserState, modelOutput: AgentOutput, step: number) => void | Promise<void>;
+  private registerActionResultCallback?: (results: ActionResult[]) => void | Promise<void>;
+  private registerDoneCallback?: (history: AgentHistoryList) => void | Promise<void>;
+  private registerExternalAgentStatusRaiseErrorCallback?: () => void | Promise<boolean>;
   private context?: Context;
   private telemetry: ProductTelemetry;
   private version!: string;
@@ -57,9 +58,10 @@ class Agent<Context> {
       controller?: Controller;
       sensitiveData?: Record<string, string>;
       initialActions?: ActionModel[];
-      registerNewStepCallback?: (state: BrowserState, modelOutput: any, step: number) => Promise<void>;
-      registerDoneCallback?: (history: any) => Promise<void>;
-      registerExternalAgentStatusRaiseErrorCallback?: () => Promise<boolean>;
+      registerNewStepCallback?: (state: BrowserState, modelOutput: AgentOutput, step: number) => void | Promise<void>;
+      registerActionResultCallback?: (results: ActionResult[]) => void | Promise<void>;
+      registerDoneCallback?: (history: AgentHistoryList) => void | Promise<void>;
+      registerExternalAgentStatusRaiseErrorCallback?: () => void | Promise<boolean>;
       useVision?: boolean;
       useVisionForPlanner?: boolean;
       saveConversationPath?: string;
@@ -175,6 +177,7 @@ class Agent<Context> {
 
     // Callbacks
     this.registerNewStepCallback = options.registerNewStepCallback;
+    this.registerActionResultCallback = options.registerActionResultCallback;
     this.registerDoneCallback = options.registerDoneCallback;
     this.registerExternalAgentStatusRaiseErrorCallback = options.registerExternalAgentStatusRaiseErrorCallback;
 
@@ -350,8 +353,10 @@ class Agent<Context> {
       }
 
       result = await this.multiAct(modelOutput.action);
-
       this.state.last_result = result;
+      if (this.registerActionResultCallback) {
+        await this.registerActionResultCallback(result);
+      }
 
       if (result.length > 0 && result[result.length - 1].is_done) {
         logger.log(`📄 Result: ${result[result.length - 1].extracted_content}`);
@@ -448,7 +453,7 @@ class Agent<Context> {
   }
 
   private makeHistoryItem(
-    modelOutput: any | null,
+    modelOutput: AgentOutput | null,
     state: BrowserState,
     result: ActionResult[],
     metadata?: any
@@ -497,7 +502,7 @@ class Agent<Context> {
     return text.trim();
   }
 
-  private convertInputMessages(inputMessages: BaseMessage[]): any[] {
+  private convertInputMessages(inputMessages: BaseMessage[]): BaseMessage[] {
     if (this.modelName === 'deepseek-reasoner' || this.modelName.includes('deepseek-r1') || this.modelName.includes('deepseek-v3')) {
       return convertInputMessages(inputMessages, this.modelName, true);
     } else {
@@ -679,7 +684,7 @@ class Agent<Context> {
   }
 
   private async multiAct(
-    actions: any[],
+    actions: ActionModel[],
     checkForNewElements: boolean = true
   ): Promise<ActionResult[]> {
     const results: ActionResult[] = [];
@@ -879,7 +884,7 @@ class Agent<Context> {
   }
 
   public async rerunHistory(
-    history: any,
+    history: AgentHistoryList,
     maxRetries: number = 3,
     skipFailures: boolean = true,
     delayBetweenActions: number = 2.0
@@ -888,18 +893,21 @@ class Agent<Context> {
     if (this.initialActions) {
       const result = await this.multiAct(this.initialActions);
       this.state.last_result = result;
+      if (this.registerActionResultCallback) {
+        await this.registerActionResultCallback(result);
+      }
     }
 
     const results: ActionResult[] = [];
 
     for (let i = 0; i < history.history.length; i++) {
       const historyItem = history.history[i];
-      const goal = historyItem.modelOutput?.current_state?.next_goal || '';
+      const goal = historyItem.model_output?.current_state?.next_goal || '';
       logger.log(`Replaying step ${i + 1}/${history.history.length}: goal: ${goal}`);
 
-      if (!historyItem.modelOutput ||
-        !historyItem.modelOutput.action ||
-        historyItem.modelOutput.action[0] == null) {
+      if (!historyItem.model_output ||
+        !historyItem.model_output.action ||
+        historyItem.model_output.action[0] == null) {
         logger.warn(`Step ${i + 1}: No action to replay, skipping`);
         results.push({ error: 'No action to replay', include_in_memory: true, is_done: false });
         continue;
@@ -931,17 +939,17 @@ class Agent<Context> {
     return results;
   }
 
-  private async executeHistoryStep(historyItem: any, delay: number): Promise<ActionResult[]> {
+  private async executeHistoryStep(historyItem: AgentHistory, delay: number): Promise<ActionResult[]> {
     const state = await this.browserContext?.get_state();
-    if (!state || !historyItem.modelOutput) {
+    if (!state || !historyItem.model_output) {
       throw new Error('Invalid state or model output');
     }
 
-    const updatedActions = [];
-    for (let i = 0; i < historyItem.modelOutput.action.length; i++) {
+    const updatedActions: ActionModel[] = [];
+    for (let i = 0; i < historyItem.model_output.action.length; i++) {
       const updatedAction = await this.updateActionIndices(
-        historyItem.state.interactedElement[i],
-        historyItem.modelOutput.action[i],
+        historyItem.state.interacted_element[i],
+        historyItem.model_output.action[i],
         state
       );
       updatedActions.push(updatedAction);
@@ -952,13 +960,16 @@ class Agent<Context> {
     }
 
     const result = await this.multiAct(updatedActions);
+    if (this.registerActionResultCallback) {
+      await this.registerActionResultCallback(result);
+    }
     await new Promise(resolve => setTimeout(resolve, delay * 1000));
     return result;
   }
 
   private async updateActionIndices(
     historicalElement: any,
-    action: any,
+    action: ActionModel,
     currentState: BrowserState
   ): Promise<any | null> {
     if (!historicalElement || !currentState.element_tree) {
@@ -971,9 +982,9 @@ class Agent<Context> {
       return null;
     }
 
-    const oldIndex = action.getIndex();
+    const oldIndex = getActionIndex(action);
     if (oldIndex !== currentElement.highlightIndex) {
-      action.setIndex(currentElement.highlightIndex);
+      setActionIndex(action, currentElement.highlightIndex);
       logger.log(`Element moved in DOM, updated index from ${oldIndex} to ${currentElement.highlightIndex}`);
     }
 
@@ -991,23 +1002,10 @@ class Agent<Context> {
       historyFile = 'AgentHistory.json';
     }
 
-    const history = this.loadHistoryFromFile(historyFile);
+    const history = AgentHistoryList.load_from_file(historyFile, this.AgentOutput );
     return await this.rerunHistory(history, options.maxRetries, options.skipFailures, options.delayBetweenActions);
   }
 
-  private loadHistoryFromFile(filePath: string | any): any {
-    if (typeof filePath === 'string') {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const history = JSON.parse(content);
-      return this.parseAgentHistoryList(history);
-    }
-    return filePath;
-  }
-
-  private parseAgentHistoryList(history: any): any {
-    // 解析历史记录的逻辑
-    return history;
-  }
 
   public saveHistory(filePath?: string | any): void {
     if (!filePath) {
@@ -1066,7 +1064,7 @@ class Agent<Context> {
     }).getSystemMessage();
   }
 
-  private saveConversation(inputMessages: any[], modelOutput: any, target: string): void {
+  private saveConversation(inputMessages: BaseMessage[], modelOutput: AgentOutput, target: string): void {
     // 实现保存对话的逻辑
     const conversation = {
       inputMessages,
@@ -1088,7 +1086,7 @@ class Agent<Context> {
     }
   }
 
-  private createHistoryGif(task: string, history: any, outputPath: string): void {
+  private createHistoryGif(task: string, history: AgentHistoryList, outputPath: string): void {
     throw new Error('Method not implemented.');
   }
 }

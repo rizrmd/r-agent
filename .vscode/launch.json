@@ -28,11 +28,11 @@
             "type": "node"
         },
         {
-            "name": "Launch deepseek",
+            "name": "Launch electron",
             "request": "launch",
             "runtimeArgs": [
                 "run",
-                "example:deepseek"
+                "example:electron"
             ],
             "runtimeExecutable": "npm",
             "skipFiles": [
@@ -41,11 +41,11 @@
             "type": "node"
         },
         {
-            "name": "Launch qwen",
+            "name": "Launch cdp",
             "request": "launch",
             "runtimeArgs": [
                 "run",
-                "example:qwen"
+                "example:cdp"
             ],
             "runtimeExecutable": "npm",
             "skipFiles": [

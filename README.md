@@ -16,7 +16,7 @@ npm install browser-use-play
 ```
 Requirements:
 
-Node: >=16.0.0
+Node: >=20.0.0
 
 ## Examples
 
@@ -50,7 +50,7 @@ import { Agent } from 'browser-use-play';
 
 // Initialize LLM
 const llm = new ChatOllama({
-  modelName: 'gpt-4o',
+  modelName: 'qwen2.5:32b',
   apiKey: process.env.OPENAI_API_KEY,
   baseUrl: process.env.OPENAI_API_BASE
 });

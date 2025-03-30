@@ -38,6 +38,13 @@ export function getActionIndex(action: Record<string, { index?: number }>): numb
   return Object.values(action)[0].index || null;
 }
 
+export function setActionIndex(action: Record<string, { index?: number }>, index: number): void {
+  const act = Object.values(action)?.[0];
+  if (act.index != null) {
+    act.index = index;
+  }
+}
+
 export class ActionRegistry {
   actions: Record<string, RegisteredAction> = {};
 

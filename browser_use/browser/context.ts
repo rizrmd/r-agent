@@ -7,7 +7,6 @@ import { BrowserContext as PlaywrightBrowserContext } from 'playwright';
 import { ElementHandle, FrameLocator, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as util from 'util';
 import { v4 as uuidv4 } from 'uuid';
 
 // Importing equivalent views and services
@@ -26,6 +25,23 @@ const logger = new Logger('browser_context');
 interface BrowserContextWindowSize {
   width: number;
   height: number;
+}
+
+interface CDPTarget {
+  /** 目标描述 */
+  description: string;
+  /** DevTools 前端 URL */
+  devtoolsFrontendUrl: string;
+  /** 目标 ID */
+  id: string;
+  /** 页面标题 */
+  title: string;
+  /** 目标类型 (page, iframe, background_page, service_worker, etc.) */
+  type: string;
+  /** 页面 URL */
+  url: string;
+  /** WebSocket 调试器 URL */
+  webSocketDebuggerUrl: string;
 }
 
 // TypeScript equivalent of dataclass
@@ -113,11 +129,13 @@ class BrowserContextConfig {
   include_dynamic_attributes: boolean = true;
 
   _force_keep_context_alive: boolean = false;
+  mode?: 'chromium' | 'electron' | 'electron-view';
 }
 
 interface BrowserSession {
   context: PlaywrightBrowserContext;
   cached_state: BrowserState | null;
+  mainPage?: Page;
 }
 
 interface BrowserContextState {
@@ -130,7 +148,7 @@ interface BrowserContextState {
 class BrowserContext {
   context_id: string;
   config: BrowserContextConfig;
-  browser: any; // Reference to the Browser class
+  browser: Browser; // Reference to the Browser class
   state: BrowserContextState;
   session: BrowserSession | null = null;
   current_state?: BrowserState;
@@ -149,6 +167,9 @@ class BrowserContext {
     this.state = state || {
       target_id: null
     };
+    if (!this.config.mode) {
+      this.config.mode = browser.config.mode;
+    }
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
@@ -227,8 +248,15 @@ class BrowserContext {
       cached_state: null
     };
 
-    let active_page = null;
+    let active_page: Page = null;
     if (this.browser.config.cdp_url) {
+      if (this.config.mode === 'electron-view') {
+        if (!this.browser.config.electronWebviewContext) {
+          throw new BrowserError('electron-view mode not provide electronWebviewContext');
+        }
+        await this.browser.config.electronWebviewContext.init(this.session);
+      }
+
       // If we have a saved target ID, try to find and activate it
       if (this.state.target_id) {
         const targets = await this._get_cdp_targets();
@@ -243,6 +271,16 @@ class BrowserContext {
             }
             break;
           }
+        }
+      }
+
+      if (!active_page && this.config.mode === 'electron-view') {
+        const pages = await this.browser.config.electronWebviewContext.pages(this.session);
+        if (pages.length > 0) {
+          active_page = pages[0];
+        }
+        else {
+          active_page = await this.browser.config.electronWebviewContext.newPage(this.session) as Page;
         }
       }
     }
@@ -312,9 +350,6 @@ class BrowserContext {
   }
 
   async get_current_page(): Promise<Page> {
-    /**
-     * Get the current page
-     */
     const session = await this.get_session();
     return await this._get_current_page(session);
   }
@@ -360,38 +395,38 @@ class BrowserContext {
 
     // Expose anti-detection scripts
     await context.addInitScript(`
-      // Webdriver property
-      Object.defineProperty(navigator, 'webdriver', {
-          get: () => undefined
-      });
+// Webdriver property
+Object.defineProperty(navigator, 'webdriver', {
+    get: () => undefined
+});
 
-      // Languages
-      Object.defineProperty(navigator, 'languages', {
-          get: () => ['en-US']
-      });
+// Languages
+Object.defineProperty(navigator, 'languages', {
+    get: () => ['en-US']
+});
 
-      // Plugins
-      Object.defineProperty(navigator, 'plugins', {
-          get: () => [1, 2, 3, 4, 5]
-      });
+// Plugins
+Object.defineProperty(navigator, 'plugins', {
+    get: () => [1, 2, 3, 4, 5]
+});
 
-      // Chrome runtime
-      window.chrome = { runtime: {} };
+// Chrome runtime
+window.chrome = { runtime: {} };
 
-      // Permissions
-      const originalQuery = window.navigator.permissions.query;
-      window.navigator.permissions.query = (parameters) => (
-          parameters.name === 'notifications' ?
-              Promise.resolve({ state: Notification.permission }) :
-              originalQuery(parameters)
-      );
-      (function () {
-          const originalAttachShadow = Element.prototype.attachShadow;
-          Element.prototype.attachShadow = function attachShadow(options) {
-              return originalAttachShadow.call(this, { ...options, mode: "open" });
-          };
-      })();
-    `);
+// Permissions
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+    parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+);
+(function () {
+    const originalAttachShadow = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function attachShadow(options) {
+        return originalAttachShadow.call(this, { ...options, mode: "open" });
+    };
+})();
+`);
 
     return context;
   }
@@ -692,7 +727,8 @@ class BrowserContext {
     await page.close();
 
     // 如果存在，切换到第一个可用标签页
-    if (session.context.pages().length) {
+    const pages = await this._session_get_pages(session);
+    if (pages.length) {
       await this.switch_to_tab(0);
     }
 
@@ -720,69 +756,69 @@ class BrowserContext {
      * 获取页面结构的调试视图，包括iframe
      */
     const debugScript = `(() => {
-        function getPageStructure(element = document, depth = 0, maxDepth = 10) {
-          if (depth >= maxDepth) return '';
+  function getPageStructure(element = document, depth = 0, maxDepth = 10) {
+    if (depth >= maxDepth) return '';
 
-          const indent = '  '.repeat(depth);
-          let structure = '';
+    const indent = '  '.repeat(depth);
+    let structure = '';
 
-          // 跳过某些会使输出混乱的元素
-          const skipTags = new Set(['script', 'style', 'link', 'meta', 'noscript']);
+    // 跳过某些会使输出混乱的元素
+    const skipTags = new Set(['script', 'style', 'link', 'meta', 'noscript']);
 
-          // 如果不是document，添加当前元素信息
-          if (element !== document) {
-            const tagName = element.tagName.toLowerCase();
+    // 如果不是document，添加当前元素信息
+    if (element !== document) {
+      const tagName = element.tagName.toLowerCase();
 
-            // 跳过不感兴趣的元素
-            if (skipTags.has(tagName)) return '';
+      // 跳过不感兴趣的元素
+      if (skipTags.has(tagName)) return '';
 
-            const id = element.id ? \`#\${element.id}\` : '';
-            const classes = element.className && typeof element.className === 'string' ?
-              \`.\${element.className.split(' ').filter(c => c).join('.')}\` : '';
+      const id = element.id ? \`#\${element.id}\` : '';
+      const classes = element.className && typeof element.className === 'string' ?
+        \`.\${element.className.split(' ').filter(c => c).join('.')}\` : '';
 
-            // 获取其他有用的属性
-            const attrs = [];
-            if (element.getAttribute('role')) attrs.push(\`role="\${element.getAttribute('role')}"\`);
-            if (element.getAttribute('aria-label')) attrs.push(\`aria-label="\${element.getAttribute('aria-label')}"\`);
-            if (element.getAttribute('type')) attrs.push(\`type="\${element.getAttribute('type')}"\`);
-            if (element.getAttribute('name')) attrs.push(\`name="\${element.getAttribute('name')}"\`);
-            if (element.getAttribute('src')) {
-              const src = element.getAttribute('src');
-              attrs.push(\`src="\${src.substring(0, 50)}\${src.length > 50 ? '...' : ''}"\`);
-            }
+      // 获取其他有用的属性
+      const attrs = [];
+      if (element.getAttribute('role')) attrs.push(\`role="\${element.getAttribute('role')}"\`);
+      if (element.getAttribute('aria-label')) attrs.push(\`aria-label="\${element.getAttribute('aria-label')}"\`);
+      if (element.getAttribute('type')) attrs.push(\`type="\${element.getAttribute('type')}"\`);
+      if (element.getAttribute('name')) attrs.push(\`name="\${element.getAttribute('name')}"\`);
+      if (element.getAttribute('src')) {
+        const src = element.getAttribute('src');
+        attrs.push(\`src="\${src.substring(0, 50)}\${src.length > 50 ? '...' : ''}"\`);
+      }
 
-            // 添加元素信息
-            structure += \`\${indent}\${tagName}\${id}\${classes}\${attrs.length ? ' [' + attrs.join(', ') + ']' : ''}\\n\`;
+      // 添加元素信息
+      structure += \`\${indent}\${tagName}\${id}\${classes}\${attrs.length ? ' [' + attrs.join(', ') + ']' : ''}\\n\`;
 
-            // 特别处理iframe
-            if (tagName === 'iframe') {
-              try {
-                const iframeDoc = element.contentDocument || element.contentWindow?.document;
-                if (iframeDoc) {
-                  structure += \`\${indent}  [IFRAME CONTENT]:\\n\`;
-                  structure += getPageStructure(iframeDoc, depth + 2, maxDepth);
-                } else {
-                  structure += \`\${indent}  [IFRAME: No access - likely cross-origin]\\n\`;
-                }
-              } catch (e) {
-                structure += \`\${indent}  [IFRAME: Access denied - \${e.message}]\\n\`;
-              }
-            }
+      // 特别处理iframe
+      if (tagName === 'iframe') {
+        try {
+          const iframeDoc = element.contentDocument || element.contentWindow?.document;
+          if (iframeDoc) {
+            structure += \`\${indent}  [IFRAME CONTENT]:\\n\`;
+            structure += getPageStructure(iframeDoc, depth + 2, maxDepth);
+          } else {
+            structure += \`\${indent}  [IFRAME: No access - likely cross-origin]\\n\`;
           }
-
-          // 获取所有子元素
-          const children = element.children || element.childNodes;
-          for (const child of children) {
-            if (child.nodeType === 1) { // 只处理元素节点
-              structure += getPageStructure(child, depth + 1, maxDepth);
-            }
-          }
-
-          return structure;
+        } catch (e) {
+          structure += \`\${indent}  [IFRAME: Access denied - \${e.message}]\\n\`;
         }
+      }
+    }
 
-        return getPageStructure();
-      })()`;
+    // 获取所有子元素
+    const children = element.children || element.childNodes;
+    for (const child of children) {
+      if (child.nodeType === 1) { // 只处理元素节点
+        structure += getPageStructure(child, depth + 1, maxDepth);
+      }
+    }
+
+    return structure;
+  }
+
+  return getPageStructure();
+})()`;
 
     const page = await this.get_current_page();
     const structure = await page.evaluate(debugScript);
@@ -820,7 +856,7 @@ class BrowserContext {
     } catch (e) {
       logger.debug(`当前页面不再可访问: ${e}`);
       // 获取所有可用页面
-      const pages = session.context.pages();
+      const pages = await this._session_get_pages(session);
       if (pages.length) {
         this.state.target_id = null;
         const page = await this._get_current_page(session);
@@ -907,8 +943,7 @@ try {
     });
 } catch (e) {
     console.error('Failed to remove highlights:', e);
-}
-        `);
+}`);
     } catch (e) {
       logger.debug(`移除高亮失败(这通常是可以的): ${e}`);
       // 不抛出错误，因为这不是关键功能
@@ -1412,13 +1447,27 @@ try {
     }
   }
 
+  async _session_get_pages(session: BrowserSession): Promise<Page[]>  {
+    if (this.config.mode === 'electron-view') {
+      return await this.browser.config.electronWebviewContext.pages(session);
+    }
+    return session.context.pages();
+  }
+
+  async _session_new_page(session: BrowserSession): Promise<Page> {
+    if (this.config.mode === 'electron-view') {
+      return await this.browser.config.electronWebviewContext.newPage(session);
+    }
+    return session.context.newPage();
+  }
+
   async _get_current_page(session: BrowserSession): Promise<Page> {
     /**
      * 获取当前活动页面
      */
-    const pages = session.context.pages();
+    const pages = await this._session_get_pages(session);
     if (!pages.length) {
-      return await session.context.newPage();
+      return await this._session_new_page(session);
     }
 
     // 如果有目标ID，尝试找到匹配的页面
@@ -1439,7 +1488,7 @@ try {
     return pages[pages.length - 1];
   }
 
-  async _get_cdp_targets(): Promise<any[]> {
+  async _get_cdp_targets(): Promise<CDPTarget[]> {
     /**
      * 获取CDP目标列表
      */
@@ -1449,10 +1498,13 @@ try {
 
     try {
       const response = await fetch(`${this.browser.config.cdp_url}/json/list`);
-      const targets = await response.json();
-      return targets.filter((target: any) =>
-        target['type'] === 'page' && !target['url'].startsWith('devtools://')
-      );
+      const targets = await response.json() as CDPTarget[];
+      return targets.filter((target: any) => {
+        if (!target['url'].startsWith('devtools://')) {
+          return false;
+        }
+        return target['type'] === 'page';
+      });
     } catch (e) {
       logger.error(`获取CDP目标失败: ${e}`);
       return [];
@@ -1464,7 +1516,7 @@ try {
      * 获取所有标签页的信息
      */
     const session = await this.get_session();
-    const pages = session.context.pages();
+    const pages = await this._session_get_pages(session);
     const tabs: TabInfo[] = [];
 
     for (let i = 0; i < pages.length; i++) {
@@ -1484,14 +1536,14 @@ try {
      * 切换到指定索引的标签页
      */
     const session = await this.get_session();
-    const pages = session.context.pages();
+    const pages = await this._session_get_pages(session);
 
     if (tab_index < 0 || tab_index >= pages.length) {
       throw new BrowserError(`无效的标签页索引: ${tab_index}, 可用标签页: ${pages.length}`);
     }
 
     const page = pages[tab_index];
-    await page.bringToFront();
+    page.bringToFront && await page.bringToFront();
 
     // 更新目标ID
     if (this.browser.config.cdp_url) {
@@ -1512,7 +1564,7 @@ try {
     // close all tabs and clear cached state
     const session = await this.get_session();
 
-    const pages = session.context.pages();
+    const pages = await this._session_get_pages(session);
     for (const page of pages) {
       await page.close();
     }
@@ -1644,7 +1696,7 @@ try {
     }
 
     const session = await this.get_session();
-    const newPage = await session.context.newPage();
+    const newPage = await this._session_new_page(session);
     await newPage.waitForLoadState();
 
     if (url) {
@@ -1653,10 +1705,10 @@ try {
     }
 
     // Get target ID for new page if using CDP
-    if (this.browser.config.cdpUrl) {
+    if (this.browser.config.cdp_url) {
       const targets = await this._get_cdp_targets();
       for (const target of targets) {
-        if (target['url'] === newPage.url) {
+        if (target['url'] === newPage.url()) {
           this.state.target_id = target['targetId'];
           break;
         }

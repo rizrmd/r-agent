@@ -1,11 +1,17 @@
-import { Browser as PlaywrightBrowser, BrowserContext as PlaywrightBrowserContext } from 'playwright';
+import { Page, Browser as PlaywrightBrowser } from 'playwright';
 import { chromium } from 'playwright';
-import * as fs from 'fs';
-import { BrowserContext, BrowserContextConfig } from './context';
+import { BrowserContext, BrowserContextConfig, BrowserSession } from './context';
 import { timeExecutionAsync } from '../utils';
 import { Logger } from '../utils';
 
 const logger = new Logger('Browser');
+
+
+interface ElectronWebViewContext {
+  init: (session: BrowserSession) => Promise<void>;
+  pages: (session: BrowserSession) => Promise<Page[]>;
+  newPage: (session: BrowserSession, url?: string) => Promise<Page>;
+}
 
 interface BrowserConfig {
   /**
@@ -39,6 +45,18 @@ interface BrowserConfig {
   cdp_url?: string;
   new_context_config: BrowserContextConfig;
   _force_keep_browser_alive: boolean;
+  /**
+   * The mode to use for the browser.
+   * default: chromium
+   * electron-view:
+   *   - Use the Electron WebContentsView to embed the browser
+   *
+   * electron:
+   *   - Use the Electron API to embed the browser
+   *   - Requires Electron to be installed
+   */
+  mode?: 'chromium' | 'electron' | 'electron-view';
+  electronWebviewContext?: ElectronWebViewContext;
 }
 
 const defaultBrowserConfig: BrowserConfig = {
@@ -53,7 +71,7 @@ const defaultBrowserConfig: BrowserConfig = {
 };
 
 class Browser {
-  private config: BrowserConfig;
+  config: BrowserConfig;
   private playwright_browser: PlaywrightBrowser | null = null;
   private disable_security_args: string[] = [];
 
@@ -110,11 +128,10 @@ class Browser {
     }
 
     const { spawn } = require('child_process');
-    const fetch = require('node-fetch');
 
     try {
       // Check if browser is already running
-      const response = await fetch('http://localhost:9222/json/version', { timeout: 2000 });
+      const response = await fetch('http://localhost:9222/json/version');
       if (response.ok) {
         logger.info('Reusing existing Chrome instance');
         return await chromium.connectOverCDP({
@@ -136,7 +153,7 @@ class Browser {
     // Wait for Chrome to start
     for (let i = 0; i < 10; i++) {
       try {
-        const response = await fetch('http://localhost:9222/json/version', { timeout: 2000 });
+        const response = await fetch('http://localhost:9222/json/version');
         if (response.ok) break;
       } catch (error) {
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -211,17 +228,6 @@ class Browser {
       this.playwright_browser = null;
       global.gc?.();
     }
-  }
-
-  async goToUrl(url: string): Promise<void> {
-    const page = await this.playwright_browser?.newPage();
-    await page?.goto(url);
-  }
-
-  async takeScreenshot(options: { fullPage: boolean }): Promise<string> {
-    const page = await this.playwright_browser?.newPage();
-    const screenshot = await page?.screenshot({ fullPage: options.fullPage });
-    return screenshot?.toString('base64') || '';
   }
 
   async [Symbol.asyncDispose](): Promise<void> {

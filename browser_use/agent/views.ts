@@ -251,7 +251,7 @@ export class AgentHistoryList {
     };
   }
 
-  static load_from_file(filepath: string, outputModel: z.ZodObject<any>): AgentHistoryList {
+  static load_from_file(filepath: string, outputModel: z.ZodType<any>): AgentHistoryList {
     const data = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
 
     // Loop through history and validate output_model actions to enrich with custom actions
@@ -465,15 +465,4 @@ export interface AgentInterface {
   run(task: string, max_steps?: number): Promise<AgentHistoryList>;
   step(state: BrowserStateHistory): Promise<AgentOutput>;
   get_history(): AgentHistoryList;
-}
-
-export class AgentFactory {
-  static createAgent(
-    settings: AgentSettings,
-    llm: BaseChatModel,
-    action_model: any
-  ): AgentInterface {
-    // 在实际实现中，这里会根据设置创建不同类型的Agent
-    throw new Error('Not implemented');
-  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "browser-use-play",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "browser use node package, Make websites accessible for AI agents",
   "main": "dist/browser_use/index.js",
   "types": "dist/browser_use/index.d.ts",
@@ -19,8 +19,9 @@
     "example:gpt": "npm run build && node dist/examples/models/gpt-4o.js",
     "example:ernie": "npm run build && node dist/examples/models/ernie4.js",
     "example:deepseek": "npm run build && node dist/examples/models/deepseek.js",
-    "example:qwen": "npm run build && node dist/examples/models/qwen.js",
+    "example:cdp": "npm run build && node dist/examples/browser/using_cdp.js",
     "example:ollama": "npm run build && node dist/examples/models/ollama.js",
+    "example:electron": "npm run build && node dist/examples/browser/electron-view.js",
     "test": "jest --runInBand"
   },
   "keywords": [],
