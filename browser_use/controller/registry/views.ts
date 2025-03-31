@@ -35,12 +35,12 @@ export const ActionModelSchema = z.record(z.record(z.any()));
 export type ActionModel = z.infer<typeof ActionModelSchema>;
 
 export function getActionIndex(action: Record<string, { index?: number }>): number | null {
-  return Object.values(action)[0].index || null;
+  return Object.values(action)?.[0]?.index || null;
 }
 
 export function setActionIndex(action: Record<string, { index?: number }>, index: number): void {
   const act = Object.values(action)?.[0];
-  if (act.index != null) {
+  if (act?.index != null) {
     act.index = index;
   }
 }

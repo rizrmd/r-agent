@@ -154,7 +154,7 @@ export class Controller<T extends Context = Context> {
         }
 
         const elementNode = await ctx.browser.getDomElementByIndex(params.index);
-        const initialPages = session.context.pages.length;
+        const initialPages = (await ctx.browser._session_get_pages(session)).length;
 
         // if element has file uploader then dont click
         if (await ctx.browser.is_file_uploader(elementNode)) {
@@ -179,7 +179,8 @@ export class Controller<T extends Context = Context> {
 
           logger.info(msg);
           logger.debug(`Element xpath: ${elementNode.xpath}`);
-          if (session.context.pages.length > initialPages) {
+          const newPages = await ctx.browser._session_get_pages(session);
+          if (newPages.length > initialPages) {
             const newTabMsg = "New tab opened - switching to it";
             msg += ` - ${newTabMsg}`;
             logger.info(newTabMsg);

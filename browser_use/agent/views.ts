@@ -160,8 +160,8 @@ export class AgentHistory {
     const elements: (DOMHistoryElement | null)[] = [];
 
     for (const action of model_output.action) {
-      const index = Object.values(action)[0].index;
-      if (index !== undefined && index in selector_map) {
+      const index = Object.values(action)[0]?.index;
+      if (index != null && index in selector_map) {
         const el: DOMElementNode = selector_map[index];
         elements.push(HistoryTreeProcessor.convert_dom_element_to_history_element(el));
       } else {

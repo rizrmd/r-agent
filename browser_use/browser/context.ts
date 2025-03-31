@@ -280,7 +280,7 @@ class BrowserContext {
           active_page = pages[0];
         }
         else {
-          active_page = await this.browser.config.electronWebviewContext.newPage(this.session) as Page;
+          active_page = await this.browser.config.electronWebviewContext.newPage(this.session);
         }
       }
     }
