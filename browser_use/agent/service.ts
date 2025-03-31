@@ -20,10 +20,10 @@ const logger = new Logger('agent/service');
 
 type ToolCallingMethod = 'auto' | 'function_calling' | 'json_mode' | 'raw' | null | undefined;
 
-class Agent<Context> {
+class Agent<Context extends unknown = any> {
   private task: string;
   private llm: BaseChatModel;
-  private controller: Controller;
+  private controller: Controller<Context>;
   private sensitiveData?: Record<string, string>;
   private settings: AgentSettings;
   private state: AgentState;
@@ -55,7 +55,7 @@ class Agent<Context> {
     options: {
       browser?: Browser;
       browserContext?: BrowserContext;
-      controller?: Controller;
+      controller?: Controller<Context>;
       sensitiveData?: Record<string, string>;
       initialActions?: ActionModel[];
       registerNewStepCallback?: (state: BrowserState, modelOutput: AgentOutput, step: number) => void | Promise<void>;
@@ -87,7 +87,7 @@ class Agent<Context> {
   ) {
     this.task = task;
     this.llm = llm;
-    this.controller = options.controller || new Controller();
+    this.controller = options.controller || new Controller<Context>();
     this.sensitiveData = options.sensitiveData;
 
     // Initialize settings with defaults

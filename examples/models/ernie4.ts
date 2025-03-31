@@ -26,6 +26,9 @@ const agent = new Agent(
 		maxFailures: 2,
 		maxActionsPerStep: 1,
     toolCallingMethod:  'raw',
+    context: {
+      simplifyText: true,
+    }
   }
 );
 

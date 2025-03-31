@@ -20,17 +20,14 @@ import {
 import { Logger } from '../utils'
 const logger = new Logger('controller/service');
 
-// Generic type for context
-type Context = any;
-
-export class Controller<T extends Context = Context> {
-  registry: Registry<T>;
+export class Controller<Context> {
+  registry: Registry<Context>;
 
   constructor(
     excludeActions: string[] = [],
     outputModel: z.infer<typeof BaseAction> = {}
   ) {
-    this.registry = new Registry<T>(excludeActions);
+    this.registry = new Registry<Context>(excludeActions);
 
     // Register all default browser actions
     if (outputModel != null) {
@@ -276,10 +273,16 @@ export class Controller<T extends Context = Context> {
       }),
       func: async (
         goal: string | {goal: string},
-        ctx: ActionRunContext,
+        ctx: ActionRunContext<Context>,
       ) => {
         const page = await ctx.browser.get_current_page();
-        const pageContent = markdownify.markdownify(await page.content());
+        const rawPageContent = await page.content();
+        const pageContent = (ctx.context as {simplifyText: boolean})?.simplifyText
+          ? markdownify.markdownify(rawPageContent, {
+            removeCss: true,
+            removeScript: true,
+          })
+          : markdownify.markdownify(rawPageContent);
 
         const prompt = `Your task is to extract the content of the page. You will be given a page and a goal`
           + ` and you should extract all relevant information around this goal from the page. If the goal is vague, `
@@ -674,7 +677,7 @@ export class Controller<T extends Context = Context> {
     pageExtractionLlm: BaseChatModel | null = null,
     sensitiveData: Record<string, string> | null = null,
     availableFilePaths: string[] | null = null,
-    context: T | null = null
+    context: Context | null = null
   ): Promise<ActionResult> {
     /**
      * Execute an action
@@ -701,6 +704,7 @@ export class Controller<T extends Context = Context> {
               page_extraction_llm: pageExtractionLlm!,
               sensitive_data: sensitiveData!,
               available_file_paths: availableFilePaths!,
+              context,
             }
           );
 

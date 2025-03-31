@@ -9,11 +9,11 @@ import {
 import { ActionResult } from "../../agent/views";
 import { timeExecutionAsync } from '../../utils';
 
-export interface ActionRunContext {
+export interface ActionRunContext<Context = any> {
   browser: BrowserContext;
   page_extraction_llm?: BaseChatModel;
   sensitive_data?: Record<string, string>;
-  context?: any;
+  context?: Context;
   available_file_paths?: string[];
   has_sensitive_data?: boolean;
 }
@@ -33,7 +33,7 @@ export class Registry<Context> {
     name: string,
     description: string,
     paramsSchema?: z.ZodObject<any>,
-    func: (params: any, ctx: ActionRunContext) => ActionResult | Promise<ActionResult | void>;
+    func: (params: any, ctx: ActionRunContext<Context>) => ActionResult | Promise<ActionResult | void>;
   }) {
     if (this.exclude_actions.includes(args.name)) {
       return;
