@@ -636,14 +636,17 @@
 
     // Check if element is draggable
     const isDraggable =
-      element.draggable || element.getAttribute("draggable") === "true";
+      (element.draggable || element.getAttribute("draggable") === "true") && element.tagName.toLowerCase() !== 'img';
+
+    const isSearchBtn = element.tagName.toLowerCase() === 'div' && /search-(?:btn|icon)/.test((element.className || ''));
 
     return (
       hasAriaProps ||
       hasClickHandler ||
       hasClickListeners ||
       isDraggable ||
-      isContentEditable
+      isContentEditable ||
+      isSearchBtn
     );
   }
 
@@ -777,7 +780,15 @@
       element.hasAttribute("aria-") ||
       element.hasAttribute("data-action");
 
-    return hasQuickInteractiveAttr;
+    if (hasQuickInteractiveAttr) return true;
+
+    const isSearchBtn = element.tagName.toLowerCase() === 'div' && /search-(?:btn|icon)/.test((element.className || ''));
+    if (isSearchBtn) {
+      element.setAttribute("role", "button");
+      element.setAttribute("aria-label", "search");
+      return true;
+    }
+    return false;
   }
 
   function quickVisibilityCheck(element) {

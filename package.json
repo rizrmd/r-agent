@@ -1,6 +1,6 @@
 {
   "name": "browser-use-play",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "browser use node package, Make websites accessible for AI agents",
   "main": "dist/browser_use/index.js",
   "types": "dist/browser_use/index.d.ts",

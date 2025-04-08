@@ -19,7 +19,7 @@ const llm = new ChatQianfan({
 
 // Initialize agent
 const agent = new Agent(
-  'Go to hackernews show hn and give me the first  5 posts',
+  '打开小红书搜索北京旅游，总结第一篇文章的内容',
   llm,
   {
     useVision: false,

@@ -1,6 +1,5 @@
 import { BaseChatModel, BaseMessage, Message, RequestParams, StructedTool } from "./langchain";
-import { formatToolCall, formatTools } from "./openai";
-import fs from 'fs';
+import { formatToolCall, formatTools } from "./langchain";
 
 /**
  * ernie 4.0 chat

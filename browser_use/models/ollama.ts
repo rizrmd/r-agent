@@ -1,5 +1,5 @@
 import { BaseChatModel, BaseMessage, Message, RequestParams, StructedTool } from "./langchain";
-import { formatTools } from "./openai";
+import { formatTools } from "./langchain";
 
 export interface OllamaOptions {
     num_keep?: number;

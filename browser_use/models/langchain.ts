@@ -1,4 +1,5 @@
 import z from 'zod';
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 type ToolCallingMethod = 'auto' | 'function_calling' | 'json_mode' | 'raw' | null | undefined;
 
@@ -88,6 +89,52 @@ export interface RequestParams {
     tool_choice?: any;
     messages: any[];
 }
+
+export function formatToolCall(additional: Message['additional_kwargs']): any[] | undefined {
+    if (!additional?.['tool_calls']) {
+        return undefined;
+    }
+    const tool_calls: any[] = [];
+    for (const tool_call of additional['tool_calls']) {
+        tool_calls.push({
+            name: tool_call.name,
+            function: {
+                name: tool_call.name,
+                arguments: JSON.stringify(tool_call.args)
+            },
+            id: tool_call.id,
+            type: 'function'
+        });
+    }
+    return tool_calls;
+}
+
+
+export function formatTools(rawTools: StructedTool[]): {tools?: any[], tool_choice?: any} {
+    if (!rawTools?.length) {
+        return {};
+    }
+    const tools: any[] = [];
+    for (const tool of rawTools) {
+        const jsonschema = zodToJsonSchema(tool.schema);
+        tools.push({
+            type: 'function',
+            function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: jsonschema
+            }
+        });
+    }
+    const tool_choice = {
+        type: 'function',
+        function: {
+            name: rawTools[0].name
+        }
+    };
+    return {tools, tool_choice};
+}
+
 
 export class BaseChatModel {
     model_name: string;
