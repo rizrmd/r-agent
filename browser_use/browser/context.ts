@@ -128,7 +128,7 @@ class BrowserContextConfig {
   allowed_domains: string[] | null = null;
   include_dynamic_attributes: boolean = true;
 
-  _force_keep_context_alive: boolean = false;
+  force_keep_context_alive: boolean = false;
   mode?: 'chromium' | 'electron' | 'electron-view';
 }
 
@@ -215,7 +215,7 @@ class BrowserContext {
       }
 
       // This is crucial - it closes the CDP connection
-      if (!this.config._force_keep_context_alive) {
+      if (!this.config.force_keep_context_alive) {
         try {
           await this.session.context.close();
         } catch (e) {
@@ -230,14 +230,14 @@ class BrowserContext {
   }
 
   @timeExecutionAsync('--initialize_session')
-  async _initialize_session(): Promise<BrowserSession> {
+  async initialize_session(): Promise<BrowserSession> {
     /**
      * Initialize the browser session
      */
     logger.debug('Initializing browser context');
 
     const playwright_browser = await this.browser.get_playwright_browser();
-    const context = await this._create_context(playwright_browser);
+    const context = await this.create_context(playwright_browser);
     this._page_event_handler = null;
 
     // Get or create a page to use
@@ -288,7 +288,7 @@ class BrowserContext {
     // If no target ID or couldn't find it, use existing page or create new
     if (!active_page) {
       if (pages.length) {
-        active_page = await this._getActivePage(pages);
+        active_page = await this.getActivePage(pages);
         logger.debug('Using existing page');
       } else {
         active_page = await context.newPage();
@@ -313,7 +313,7 @@ class BrowserContext {
 
     return this.session;
   }
-  async _getActivePage(pages: Page[]): Promise<Page> {
+  async getActivePage(pages: Page[]): Promise<Page> {
     for (const page of pages) {
       // Check if this page is the active one
       const isVisible = await page.evaluate(() => document.visibilityState === 'visible');
@@ -323,7 +323,7 @@ class BrowserContext {
     }
     return pages[pages.length - 1];
   };
-  _add_new_page_listener(context: PlaywrightBrowserContext): void {
+  add_new_page_listener(context: PlaywrightBrowserContext): void {
     const on_page = async (page: Page): Promise<void> => {
       if (this.browser.config.cdp_url) {
         await page.reload(); // Reload the page to avoid timeout errors
@@ -344,17 +344,17 @@ class BrowserContext {
      * Lazy initialization of the browser and related components
      */
     if (this.session == null) {
-      return await this._initialize_session();
+      return await this.initialize_session();
     }
     return this.session;
   }
 
   async get_current_page(): Promise<Page> {
     const session = await this.get_session();
-    return await this._get_current_page(session);
+    return await this.session_get_current_page(session);
   }
 
-  async _create_context(browser: PlaywrightBrowser): Promise<PlaywrightBrowserContext> {
+  async create_context(browser: PlaywrightBrowser): Promise<PlaywrightBrowserContext> {
     /**
      * Creates a new browser context with anti-detection measures and loads cookies if available.
      */
@@ -431,7 +431,7 @@ window.navigator.permissions.query = (parameters) => (
     return context;
   }
 
-  async _wait_for_stable_network(): Promise<void> {
+  async wait_for_stable_network(): Promise<void> {
     const page = await this.get_current_page();
 
     const pendingRequests = new Set();
@@ -592,7 +592,7 @@ window.navigator.permissions.query = (parameters) => (
     logger.debug(`Network stabilized for ${this.config.wait_for_network_idle_page_load_time} seconds`);
   }
 
-  async _wait_for_page_and_frames_load(timeout_overwrite: number | null = null): Promise<void> {
+  async wait_for_page_and_frames_load(timeout_overwrite: number | null = null): Promise<void> {
     /**
      * 确保页面完全加载后再继续。
      * 等待网络空闲或最小等待时间，以较长者为准。
@@ -603,11 +603,11 @@ window.navigator.permissions.query = (parameters) => (
 
     // 等待页面加载
     try {
-      await this._wait_for_stable_network();
+      await this.wait_for_stable_network();
 
       // 检查加载的URL是否被允许
       const page = await this.get_current_page();
-      await this._check_and_handle_navigation(page);
+      await this.check_and_handle_navigation(page);
     } catch (e) {
       if (e instanceof URLNotAllowedError) {
         throw e;
@@ -627,7 +627,7 @@ window.navigator.permissions.query = (parameters) => (
     }
   }
 
-  _is_url_allowed(url: string): boolean {
+  private _is_url_allowed(url: string): boolean {
     /**
      * 根据白名单配置检查URL是否被允许。
      */
@@ -654,7 +654,7 @@ window.navigator.permissions.query = (parameters) => (
     }
   }
 
-  async _check_and_handle_navigation(page: Page): Promise<void> {
+  async check_and_handle_navigation(page: Page): Promise<void> {
     /**
      * 检查当前页面URL是否被允许，如果不允许则处理。
      */
@@ -723,11 +723,11 @@ window.navigator.permissions.query = (parameters) => (
      * 关闭当前标签页
      */
     const session = await this.get_session();
-    const page = await this._get_current_page(session);
+    const page = await this.session_get_current_page(session);
     await page.close();
 
     // 如果存在，切换到第一个可用标签页
-    const pages = await this._session_get_pages(session);
+    const pages = await this.session_get_pages(session);
     if (pages.length) {
       await this.switch_to_tab(0);
     }
@@ -830,7 +830,7 @@ window.navigator.permissions.query = (parameters) => (
     /**
      * 获取浏览器的当前状态
      */
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
     const session = await this.get_session();
     session.cached_state = await this._update_state();
 
@@ -842,7 +842,7 @@ window.navigator.permissions.query = (parameters) => (
     return session.cached_state;
   }
 
-  async _update_state(focus_element: number = -1): Promise<BrowserState> {
+  private async _update_state(focus_element: number = -1): Promise<BrowserState> {
     /**
      * 更新并返回状态
      */
@@ -856,10 +856,10 @@ window.navigator.permissions.query = (parameters) => (
     } catch (e) {
       logger.debug(`当前页面不再可访问: ${e}`);
       // 获取所有可用页面
-      const pages = await this._session_get_pages(session);
+      const pages = await this.session_get_pages(session);
       if (pages.length) {
         this.state.target_id = null;
-        const page = await this._get_current_page(session);
+        const page = await this.session_get_current_page(session);
         logger.debug(`切换到页面: ${await page.title()}`);
       } else {
         throw new BrowserError('浏览器已关闭: 没有有效的页面可用');
@@ -953,7 +953,7 @@ try {
 
   // region - 用户操作
 
-  static _convert_simple_xpath_to_css_selector(xpath: string): string {
+  private static _convert_simple_xpath_to_css_selector(xpath: string): string {
     /**
      * 将简单的XPath表达式转换为CSS选择器
      */
@@ -1026,7 +1026,7 @@ try {
   }
 
   @timeExecutionSync('--enhanced_css_selector_for_element')
-  static _enhanced_css_selector_for_element(element: DOMElementNode, include_dynamic_attributes: boolean = true): string {
+  static enhanced_css_selector_for_element(element: DOMElementNode, include_dynamic_attributes: boolean = true): string {
     /**
      * 为DOM元素创建CSS选择器，处理各种边缘情况和特殊字符
      *
@@ -1164,14 +1164,14 @@ try {
     // 按顺序处理所有iframe父元素
     const iframes = parents.filter(item => item.tag_name === 'iframe');
     for (const parent of iframes) {
-      const css_selector = BrowserContext._enhanced_css_selector_for_element(
+      const css_selector = BrowserContext.enhanced_css_selector_for_element(
         parent,
         this.config.include_dynamic_attributes
       );
       current_frame = (current_frame as Page).frameLocator(css_selector);
     }
 
-    const css_selector = BrowserContext._enhanced_css_selector_for_element(
+    const css_selector = BrowserContext.enhanced_css_selector_for_element(
       element,
       this.config.include_dynamic_attributes
     );
@@ -1196,7 +1196,7 @@ try {
   }
 
   @timeExecutionAsync('--input_text_element_node')
-  async _input_text_element_node(element_node: DOMElementNode, text: string): Promise<void> {
+  async input_text_element_node(element_node: DOMElementNode, text: string): Promise<void> {
     /**
      * 将文本输入到元素中，具有适当的错误处理和状态管理。
      * 处理不同类型的输入字段，并确保输入前元素状态正确。
@@ -1240,7 +1240,7 @@ try {
 
 
   @timeExecutionAsync('--click_element_node')
-  async _click_element_node(elementNode: DOMElementNode): Promise<string | null> {
+  async click_element_node(elementNode: DOMElementNode): Promise<string | null> {
     const page = await this.get_current_page();
 
     try {
@@ -1275,7 +1275,7 @@ try {
               // If no download is triggered, treat as normal click
               logger.debug('No download triggered within timeout. Checking navigation...');
               await page.waitForLoadState();
-              await this._check_and_handle_navigation(page);
+              await this.check_and_handle_navigation(page);
             } else {
               throw e;
             }
@@ -1284,7 +1284,7 @@ try {
           // Standard click logic if no download is expected
           await clickFunc();
           await page.waitForLoadState();
-          await this._check_and_handle_navigation(page);
+          await this.check_and_handle_navigation(page);
         }
         return null;
       };
@@ -1318,7 +1318,7 @@ try {
     /**
      * 在指定索引的元素中输入文本
      */
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
     const session = await this.get_session();
 
     if (!session.cached_state) {
@@ -1331,10 +1331,10 @@ try {
     }
 
     const element_node = selector_map[element_index];
-    await this._input_text_element_node(element_node, text);
+    await this.input_text_element_node(element_node, text);
 
     // 等待页面加载
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
 
     // 更新状态
     session.cached_state = await this._update_state(element_index);
@@ -1344,7 +1344,7 @@ try {
     /**
      * 点击指定索引的元素
      */
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
     const session = await this.get_session();
 
     if (!session.cached_state) {
@@ -1357,10 +1357,10 @@ try {
     }
 
     const element_node = selector_map[element_index];
-    await this._click_element_node(element_node);
+    await this.click_element_node(element_node);
 
     // 等待页面加载
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
 
     // 更新状态
     session.cached_state = await this._update_state();
@@ -1370,7 +1370,7 @@ try {
     /**
      * 通过CSS选择器点击元素
      */
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
     const page = await this.get_current_page();
 
     try {
@@ -1380,7 +1380,7 @@ try {
     }
 
     // 等待页面加载
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
 
     // 更新状态
     const session = await this.get_session();
@@ -1391,7 +1391,7 @@ try {
     /**
      * 通过CSS选择器在元素中输入文本
      */
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
     const page = await this.get_current_page();
 
     try {
@@ -1401,7 +1401,7 @@ try {
     }
 
     // 等待页面加载
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
 
     // 更新状态
     const session = await this.get_session();
@@ -1412,7 +1412,7 @@ try {
     /**
      * 按下键盘按键
      */
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
     const page = await this.get_current_page();
 
     try {
@@ -1422,7 +1422,7 @@ try {
     }
 
     // 等待页面加载
-    await this._wait_for_page_and_frames_load();
+    await this.wait_for_page_and_frames_load();
 
     // 更新状态
     const session = await this.get_session();
@@ -1447,27 +1447,27 @@ try {
     }
   }
 
-  async _session_get_pages(session: BrowserSession): Promise<Page[]>  {
+  async session_get_pages(session: BrowserSession): Promise<Page[]>  {
     if (this.config.mode === 'electron-view') {
       return await this.browser.config.electronWebviewContext.pages(session);
     }
     return session.context.pages();
   }
 
-  async _session_new_page(session: BrowserSession): Promise<Page> {
+  async session_new_page(session: BrowserSession): Promise<Page> {
     if (this.config.mode === 'electron-view') {
       return await this.browser.config.electronWebviewContext.newPage(session);
     }
     return session.context.newPage();
   }
 
-  async _get_current_page(session: BrowserSession): Promise<Page> {
+  async session_get_current_page(session: BrowserSession): Promise<Page> {
     /**
      * 获取当前活动页面
      */
-    const pages = await this._session_get_pages(session);
+    const pages = await this.session_get_pages(session);
     if (!pages.length) {
-      return await this._session_new_page(session);
+      return await this.session_new_page(session);
     }
 
     // 如果有目标ID，尝试找到匹配的页面
@@ -1488,7 +1488,7 @@ try {
     return pages[pages.length - 1];
   }
 
-  async _get_cdp_targets(): Promise<CDPTarget[]> {
+  private async _get_cdp_targets(): Promise<CDPTarget[]> {
     /**
      * 获取CDP目标列表
      */
@@ -1516,7 +1516,7 @@ try {
      * 获取所有标签页的信息
      */
     const session = await this.get_session();
-    const pages = await this._session_get_pages(session);
+    const pages = await this.session_get_pages(session);
     const tabs: TabInfo[] = [];
 
     for (let i = 0; i < pages.length; i++) {
@@ -1536,7 +1536,7 @@ try {
      * 切换到指定索引的标签页
      */
     const session = await this.get_session();
-    const pages = await this._session_get_pages(session);
+    const pages = await this.session_get_pages(session);
 
     if (tab_index < 0 || tab_index >= pages.length) {
       throw new BrowserError(`无效的标签页索引: ${tab_index}, 可用标签页: ${pages.length}`);
@@ -1564,7 +1564,7 @@ try {
     // close all tabs and clear cached state
     const session = await this.get_session();
 
-    const pages = await this._session_get_pages(session);
+    const pages = await this.session_get_pages(session);
     for (const page of pages) {
       await page.close();
     }
@@ -1696,12 +1696,12 @@ try {
     }
 
     const session = await this.get_session();
-    const newPage = await this._session_new_page(session);
+    const newPage = await this.session_new_page(session);
     await newPage.waitForLoadState();
 
     if (url) {
       await newPage.goto(url);
-      await this._wait_for_page_and_frames_load(1);
+      await this.wait_for_page_and_frames_load(1);
     }
 
     // Get target ID for new page if using CDP

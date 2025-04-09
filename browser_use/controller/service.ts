@@ -151,7 +151,7 @@ export class Controller<Context> {
         }
 
         const elementNode = await ctx.browser.getDomElementByIndex(params.index);
-        const initialPages = (await ctx.browser._session_get_pages(session)).length;
+        const initialPages = (await ctx.browser.session_get_pages(session)).length;
 
         // if element has file uploader then dont click
         if (await ctx.browser.is_file_uploader(elementNode)) {
@@ -166,7 +166,7 @@ export class Controller<Context> {
         let msg = null;
 
         try {
-          const downloadPath = await ctx.browser._click_element_node(elementNode);
+          const downloadPath = await ctx.browser.click_element_node(elementNode);
           if (downloadPath) {
             msg = `💾  Downloaded file to ${downloadPath}`;
           } else {
@@ -176,7 +176,7 @@ export class Controller<Context> {
 
           logger.info(msg);
           logger.debug(`Element xpath: ${elementNode.xpath}`);
-          const newPages = await ctx.browser._session_get_pages(session);
+          const newPages = await ctx.browser.session_get_pages(session);
           if (newPages.length > initialPages) {
             const newTabMsg = "New tab opened - switching to it";
             msg += ` - ${newTabMsg}`;
@@ -212,7 +212,7 @@ export class Controller<Context> {
         }
 
         const elementNode = await ctx.browser.getDomElementByIndex(params.index);
-        await ctx.browser._input_text_element_node(elementNode, params.text);
+        await ctx.browser.input_text_element_node(elementNode, params.text);
 
         let msg = '';
         if (!ctx.has_sensitive_data) {

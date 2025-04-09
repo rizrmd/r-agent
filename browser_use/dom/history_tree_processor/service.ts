@@ -20,8 +20,8 @@ export class HistoryTreeProcessor {
    */
 
   static convert_dom_element_to_history_element(dom_element: DOMElementNode): DOMHistoryElement {
-    const parent_branch_path = HistoryTreeProcessor._get_parent_branch_path(dom_element);
-    const css_selector = BrowserContext._enhanced_css_selector_for_element(dom_element);
+    const parent_branch_path = HistoryTreeProcessor.get_parent_branch_path(dom_element);
+    const css_selector = BrowserContext.enhanced_css_selector_for_element(dom_element);
 
     return new DOMHistoryElement({
       tag_name: dom_element.tag_name,
@@ -41,11 +41,11 @@ export class HistoryTreeProcessor {
     dom_history_element: DOMHistoryElement,
     tree: DOMElementNode
   ): DOMElementNode | null {
-    const hashed_dom_history_element = HistoryTreeProcessor._hash_dom_history_element(dom_history_element);
+    const hashed_dom_history_element = HistoryTreeProcessor.hash_dom_history_element(dom_history_element);
 
     const process_node = (node: DOMElementNode): DOMElementNode | null => {
       if (node.highlight_index != null) {
-        const hashed_node = HistoryTreeProcessor._hash_dom_element(node);
+        const hashed_node = HistoryTreeProcessor.hash_dom_element(node);
         if (isHashDomHistorySame(hashed_node, hashed_dom_history_element)) {
           return node;
         }
@@ -69,14 +69,14 @@ export class HistoryTreeProcessor {
     dom_history_element: DOMHistoryElement,
     dom_element: DOMElementNode
   ): boolean {
-    const hashed_dom_history_element = HistoryTreeProcessor._hash_dom_history_element(dom_history_element);
-    const hashed_dom_element = HistoryTreeProcessor._hash_dom_element(dom_element);
+    const hashed_dom_history_element = HistoryTreeProcessor.hash_dom_history_element(dom_history_element);
+    const hashed_dom_element = HistoryTreeProcessor.hash_dom_element(dom_element);
 
     return isHashDomHistorySame(hashed_dom_history_element, hashed_dom_element);
   }
 
-  static _hash_dom_history_element(dom_history_element: DOMHistoryElement): HashedDomElement {
-    const branch_path_hash = HistoryTreeProcessor._parent_branch_path_hash(
+  static hash_dom_history_element(dom_history_element: DOMHistoryElement): HashedDomElement {
+    const branch_path_hash = HistoryTreeProcessor.parent_branch_path_hash(
       dom_history_element.entire_parent_branch_path
     );
     const attributes_hash = HistoryTreeProcessor._attributes_hash(dom_history_element.attributes);
@@ -85,16 +85,16 @@ export class HistoryTreeProcessor {
     return { branch_path_hash, attributes_hash, xpath_hash };
   }
 
-  static _hash_dom_element(dom_element: DOMElementNode): HashedDomElement {
-    const parent_branch_path = HistoryTreeProcessor._get_parent_branch_path(dom_element);
-    const branch_path_hash = HistoryTreeProcessor._parent_branch_path_hash(parent_branch_path);
+  static hash_dom_element(dom_element: DOMElementNode): HashedDomElement {
+    const parent_branch_path = HistoryTreeProcessor.get_parent_branch_path(dom_element);
+    const branch_path_hash = HistoryTreeProcessor.parent_branch_path_hash(parent_branch_path);
     const attributes_hash = HistoryTreeProcessor._attributes_hash(dom_element.attributes);
     const xpath_hash = HistoryTreeProcessor._xpath_hash(dom_element.xpath);
 
     return { branch_path_hash, attributes_hash, xpath_hash };
   }
 
-  static _get_parent_branch_path(dom_element: DOMElementNode): string[] {
+  static get_parent_branch_path(dom_element: DOMElementNode): string[] {
     const parents: DOMElementNode[] = [];
     let current_element: DOMElementNode | null = dom_element;
 
@@ -107,23 +107,23 @@ export class HistoryTreeProcessor {
     return parents.map(parent => parent.tag_name);
   }
 
-  static _parent_branch_path_hash(parent_branch_path: string[]): string {
+  static parent_branch_path_hash(parent_branch_path: string[]): string {
     const parent_branch_path_string = parent_branch_path.join('/');
     return createHash('sha256').update(parent_branch_path_string).digest('hex');
   }
 
-  static _attributes_hash(attributes: { [key: string]: string }): string {
+  private static _attributes_hash(attributes: { [key: string]: string }): string {
     const attributes_string = Object.entries(attributes)
       .map(([key, value]) => `${key}=${value}`)
       .join('');
     return createHash('sha256').update(attributes_string).digest('hex');
   }
 
-  static _xpath_hash(xpath: string): string {
+  private static _xpath_hash(xpath: string): string {
     return createHash('sha256').update(xpath).digest('hex');
   }
 
-  static _text_hash(dom_element: DOMElementNode): string {
+  private static _text_hash(dom_element: DOMElementNode): string {
     const text_string = dom_element.get_all_text_till_next_clickable_element();
     return createHash('sha256').update(text_string).digest('hex');
   }

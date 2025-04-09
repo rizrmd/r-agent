@@ -115,7 +115,7 @@ export class DOMElementNode extends DOMBaseNode {
 
   get hash(): HashedDomElement {
     if (!this._hash) {
-      this._hash = HistoryTreeProcessor._hash_dom_element(this);
+      this._hash = HistoryTreeProcessor.hash_dom_element(this);
     }
     return this._hash;
   }

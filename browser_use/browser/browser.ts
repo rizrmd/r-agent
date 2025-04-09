@@ -44,7 +44,7 @@ interface BrowserConfig {
   wss_url?: string;
   cdp_url?: string;
   new_context_config: BrowserContextConfig;
-  _force_keep_browser_alive: boolean;
+  force_keep_browser_alive: boolean;
   /**
    * The mode to use for the browser.
    * default: chromium
@@ -67,7 +67,7 @@ const defaultBrowserConfig: BrowserConfig = {
   wss_url: undefined,
   cdp_url: undefined,
   new_context_config: new BrowserContextConfig(),
-  _force_keep_browser_alive: false
+  force_keep_browser_alive: false
 };
 
 class Browser {
@@ -216,7 +216,7 @@ class Browser {
 
   async close(): Promise<void> {
     try {
-      if (!this.config._force_keep_browser_alive) {
+      if (!this.config.force_keep_browser_alive) {
         if (this.playwright_browser) {
           await this.playwright_browser.close();
           this.playwright_browser = null;
