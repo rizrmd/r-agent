@@ -490,6 +490,11 @@
       }
     }
 
+    // qrcode not interactive
+    if (element.className.includes('qrcode') && ['img', 'canvas'].includes(element.tagName.toLowerCase())) {
+      return false;
+    }
+
     // Base interactive elements and roles
     const interactiveElements = new Set([
       "a", "button", "details", "embed", "input", "menu", "menuitem",
