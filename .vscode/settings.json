@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/.vscode": true,
+    "**/node_modules": true,
+    "**/.gitignore": true,
+    "**/bun.lock": true,
+    "bunfig.toml": true,
+    ".dockerignore": true
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

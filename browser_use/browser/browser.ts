@@ -64,7 +64,7 @@ export interface BrowserConfig {
 }
 
 const defaultBrowserConfig: BrowserConfig = {
-  headless: true,
+  headless: false,
   disable_security: true,
   extra_chromium_args: [],
   chrome_instance_path: undefined,

@@ -1,9 +1,7 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { SystemMessage, HumanMessage } from '../models/langchain';
 import { BrowserState } from '../browser/views';
-import { ActionResult, AgentStepInfo } from './views';
+import { HumanMessage, SystemMessage } from '../models/langchain';
 import { systemPromptTemplate } from './system_prompt';
+import { ActionResult, AgentStepInfo } from './views';
 
 export class SystemPrompt {
   private defaultActionDescription: string;

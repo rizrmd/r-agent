@@ -74,16 +74,24 @@ export class ChatGroqAI extends BaseChatModel {
       body,
     });
 
+    const logDir = join(process.cwd(), "logs");
+    const dirExists = existsSync(logDir);
+    if (!dirExists) {
+      mkdirSync(logDir, { recursive: true });
+    }
+    let input: any = body;
+    try {
+      input = JSON.parse(body);
+    } catch (e) {}
+
     if (!response.ok) {
       const errorBody = await response.text();
 
       let result: any = errorBody;
-      let input: any = body;
       let parsedFailedGeneration: any = null;
 
       try {
         result = JSON.parse(errorBody);
-        input = JSON.parse(body);
 
         if (
           result &&
@@ -122,13 +130,8 @@ export class ChatGroqAI extends BaseChatModel {
         logData.parsed_failed_generation = parsedFailedGeneration;
       }
 
-      const errorLogDir = join(process.cwd(), "error_logs");
-      const dirExists = existsSync(errorLogDir);
-      if (!dirExists) {
-        mkdirSync(errorLogDir, { recursive: true });
-      }
       Bun.file(
-        join(process.cwd(), "error_logs", Date.now().toString()) + ".json"
+        join(process.cwd(), "logs", Date.now().toString()) + ".error.json"
       ).write(JSON.stringify(logData, null, 2));
 
       console.error(
@@ -147,6 +150,14 @@ export class ChatGroqAI extends BaseChatModel {
 
     const responseData = await response.json();
 
+    const logData: any = {
+      status: response.status,
+      body: input,
+      response: responseData,
+    };
+    Bun.file(
+      join(process.cwd(), "logs", Date.now().toString()) + ".log.json"
+    ).write(JSON.stringify(logData, null, 2));
     if (!responseData.choices || responseData.choices.length === 0) {
       console.error("Groq API Error: No choices returned", responseData);
       throw new Error("Groq API request returned no choices.");

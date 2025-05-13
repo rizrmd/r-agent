@@ -7,7 +7,7 @@ import {
   AgentOutput,
   AgentSettings,
   AgentState,
-  AgentStepInfo
+  AgentStepInfo,
 } from "../agent/views";
 import { Browser } from "../browser/browser";
 import { BrowserContext, BrowserContextConfig } from "../browser/context";
@@ -51,7 +51,7 @@ import {
 
 const logger = new Logger("agent/service");
 
-class Agent<Context extends unknown = any> {
+class BrowserAgent<Context extends unknown = any> {
   private task: string;
   private llm: BaseChatModel;
   private controller: Controller<Context>;
@@ -366,7 +366,9 @@ class Agent<Context extends unknown = any> {
           inputMessages,
           this.toolCallingMethod,
           // Use DoneAgentOutput if it's the last step, otherwise AgentOutput
-          stepInfo && stepInfo.is_last_step() ? this.DoneAgentOutput : this.AgentOutput,
+          stepInfo && stepInfo.is_last_step()
+            ? this.DoneAgentOutput
+            : this.AgentOutput,
           this.modelName
         );
         this.state.n_steps += 1;
@@ -436,11 +438,11 @@ class Agent<Context extends unknown = any> {
         this.state.last_result = result;
       }
     } finally {
-    const stepEndTime = Date.now();
-    const actions = modelOutput
-      ? modelOutput.action.map((a) => excludeUnset(a))
-      : [];
-    this.telemetry.capture({
+      const stepEndTime = Date.now();
+      const actions = modelOutput
+        ? modelOutput.action.map((a) => excludeUnset(a))
+        : [];
+      this.telemetry.capture({
         name: "agent_step",
         agentId: this.state.agent_id,
         step: this.state.n_steps,
@@ -808,7 +810,10 @@ class Agent<Context extends unknown = any> {
       }
     }
 
-    const convertedMessages = convertAgentInputMessages(plannerMessages, this.modelName);
+    const convertedMessages = convertAgentInputMessages(
+      plannerMessages,
+      this.modelName
+    );
 
     // Get planner output
     const response = await this.settings.planner_llm.invoke(convertedMessages);
@@ -1074,7 +1079,8 @@ class Agent<Context extends unknown = any> {
 
   private convertInitialActions(
     actions?: z.infer<typeof ActionModel>[] // Use z.infer
-  ): z.infer<typeof ActionModel>[] | undefined { // Use z.infer
+  ): z.infer<typeof ActionModel>[] | undefined {
+    // Use z.infer
     // Added | undefined
     if (!actions) return undefined;
 
@@ -1143,4 +1149,4 @@ class Agent<Context extends unknown = any> {
 }
 
 // Export class
-export { Agent };
+export { BrowserAgent as BrowserAgent };

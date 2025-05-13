@@ -1,19 +1,10 @@
 {
-  "name": "browser-use-play",
+  "name": "r-agent",
   "version": "1.0.10",
   "description": "browser use node package, Make websites accessible for AI agents",
-  "main": "dist/browser_use/index.js",
-  "types": "dist/browser_use/index.d.ts",
-  "files": [
-    "dist/browser_use/**/*.js",
-    "dist/browser_use/**/*.d.ts",
-    "!dist/browser_use/**/tests/*"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/kekee000/browser-use-play.git"
-  },
-  "homepage": "https://github.com/kekee000/browser-use-play",
+  "main": "browser_use/index.ts",
+  "types": "browser_use/index.ts",
+  "module": "browser_use/index.ts",
   "scripts": {
     "build": "find ./dist -name '*.d.ts' | xargs rm -f && tsc && cp -rf browser_use/dom/*.js dist/browser_use/dom",
     "example:gpt": "npm run build && node dist/examples/models/gpt-4o.js",

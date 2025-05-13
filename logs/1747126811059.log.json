@@ -1,0 +1,470 @@
+{
+  "status": 200,
+  "body": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an AI agent designed to automate browser tasks. Your goal is to accomplish the ultimate task following the rules.\n\n# Input Format\nTask\nPrevious steps\nCurrent URL\nOpen Tabs\nInteractive Elements\n[index]<type>text</type>\n- index: Numeric identifier for interaction\n- type: HTML element type (button, input, etc.)\n- text: Element description\nExample:\n[33]<button>Submit Form</button>\n\n- Only elements with numeric indexes in [] are interactive\n- elements without [] provide only context\n\n# Response Rules\n1. RESPONSE FORMAT: You must ALWAYS respond with valid JSON in this exact format:\n{\"current_state\": {\"evaluation_previous_goal\": \"Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Mention if something unexpected happened. Shortly state why/why not\",\n\"memory\": \"Description of what has been done and what you need to remember. Be very specific. Count here ALWAYS how many times you have done something and how many remain. E.g. 0 out of 10 websites analyzed. Continue with abc and xyz\",\n\"next_goal\": \"What needs to be done with the next immediate action\"},\n\"action\":[{\"one_action_name\": {// action-specific parameter}}, // ... more actions in sequence]}\n\n2. ACTIONS: You can specify multiple actions in the list to be executed in sequence. But always specify only one action name per item. Use maximum 10 actions per sequence.\nCommon action sequences:\n- Form filling: [{\"input_text\": {\"index\": 1, \"text\": \"username\"}}, {\"input_text\": {\"index\": 2, \"text\": \"password\"}}, {\"click_element\": {\"index\": 3}}]\n- Navigation and extraction: [{\"go_to_url\": {\"url\": \"https://example.com\"}}, {\"extract_content\": {\"goal\": \"extract the names\"}}]\n- Actions are executed in the given order\n- If the page changes after an action, the sequence is interrupted and you get the new state.\n- Only provide the action sequence until an action which changes the page state significantly.\n- Try to be efficient, e.g. fill forms at once, or chain actions where nothing changes on the page\n- only use multiple actions if it makes sense.\n\n3. ELEMENT INTERACTION:\n- Only use indexes of the interactive elements\n- Elements marked with \"[]Non-interactive text\" are non-interactive\n\n4. NAVIGATION & ERROR HANDLING:\n- If no suitable elements exist, use other functions to complete the task\n- If stuck, try alternative approaches - like going back to a previous page, new search, new tab etc.\n- Handle popups/cookies by accepting or closing them\n- Use scroll to find elements you are looking for\n- If you want to research something, open a new tab instead of using the current tab\n- If captcha pops up, try to solve it - else try a different approach\n- If the page is not fully loaded, use wait action\n\n5. TASK COMPLETION:\n- Use the done action as the last action as soon as the ultimate task is complete\n- Dont use \"done\" before you are done with everything the user asked you, except you reach the last step of max_steps.\n- If you reach your last step, use the done action even if the task is not fully finished. Provide all the information you have gathered so far. If the ultimate task is completly finished set success to true. If not everything the user asked for is completed set success in done to false!\n- If you have to do something repeatedly for example the task says for \"each\", or \"for all\", or \"x times\", count always inside \"memory\" how many times you have done it and how many remain. Don't stop until you have completed like the task asked you. Only call done after the last step.\n- Don't hallucinate actions\n- Make sure you include everything you found out for the ultimate task in the done text parameter. Do not just say you are done, but include the requested information of the task.\n\n6. VISUAL CONTEXT:\n- When an image is provided, use it to understand the page layout\n- Bounding boxes with labels on their top right corner correspond to element indexes\n\n7. Form filling:\n- If you fill an input field and your action sequence is interrupted, most often something changed e.g. suggestions popped up under the field.\n\n8. Long tasks:\n- Keep track of the status and subresults in the memory.\n\n9. Extraction:\n- If your task is to find information - call extract_content on the specific pages to get and store the information.\nYour responses must be always JSON with the specified format."
+      },
+      {
+        "role": "user",
+        "content": "Your ultimate task is: \"\"\"search for rizrmd github on the web, visit the most link, provide summary  about the page in this format { \"github_name\": \"\", \"repositories\": [\"\"] }.\"\"\". If you achieved your ultimate task, stop everything and use the done action in the next step to complete the task. If not, continue as usual."
+      },
+      {
+        "role": "user",
+        "content": "Example output:"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "1",
+            "type": "function",
+            "function": {
+              "name": "AgentOutput",
+              "arguments": "{\"current_state\":{\"evaluation_previous_goal\":\"Success - I opend the first page\",\"memory\":\"Starting with the new task. I have completed 1/10 steps\",\"next_goal\":\"Click on company a\"},\"action\":[{\"click_element\":{\"index\":0}}]}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "Browser started",
+        "tool_call_id": "1"
+      },
+      {
+        "role": "user",
+        "content": "[Your task history memory starts here]"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "\n[Task history memory ends]\n[Current state starts here]\nThe following is one-time information - if you need to remember it write it to memory:\nCurrent url: about:blank\nAvailable tabs:\nTabInfo(page_id=0, url=about:blank, title=)\nInteractive elements from top layer of the current page inside the viewport:\nempty page\nCurrent step: 1/10 Current date and time: 5/13/2025, 4:00:09 PM\n"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABQAAAARMCAIAAABJa6kDAAAAAXNSR0IArs4c6QAAGWpJREFUeJzs18ENwCAQwLDS/Xc+tgCJ2BPkmzUzHwAAALzuvx0AAAAAJxhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAAAJBhgAAIAEAwwAAECCAQYAACDBAAMAAJBggAEAAEgwwAAAACQYYAAAABIMMAAAAAkGGAAAgAQDDAAAQIIBBgAAIMEAAwAAkGCAAQAASDDAAAAAJBhgAAAAEgwwAAAACQYYAACABAMMAABAggEGAAAgwQADAACQYIABAABIMMAAAAAkGGAAAAASDDAAAOz260AAAAAAQJC/9SCXRcCCAAMAALAgwAAAACwIMAAAAAsCDAAAwIIAAwAAsCDAAAAALAgwAAAACwIMAADAQl52C5UNu/8AAAAAAElFTkSuQmCC"
+            }
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "AgentOutput",
+          "description": "AgentOutput model with custom actions",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "current_state": {
+                "type": "object",
+                "properties": {
+                  "evaluation_previous_goal": {
+                    "type": "string"
+                  },
+                  "memory": {
+                    "type": "string"
+                  },
+                  "next_goal": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "evaluation_previous_goal",
+                  "memory",
+                  "next_goal"
+                ],
+                "additionalProperties": false,
+                "description": "Current state of the agent"
+              },
+              "action": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "done": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "success": {
+                              "type": "boolean"
+                            },
+                            "data": {}
+                          },
+                          "required": [
+                            "success"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Complete task - with return text and if the task is finished (success=True) or not yet completly finished (success=False), because last step is reached"
+                    },
+                    "search_google": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "query": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "query"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Search the query in Google in the current tab, the query should be a search query like humans search in Google, concrete and not vague or super long. More the single most important items."
+                    },
+                    "go_to_url": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Navigate to URL in the current tab"
+                    },
+                    "go_back": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Go back"
+                    },
+                    "wait": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "seconds": {
+                              "type": "number"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Wait for x seconds default 3"
+                    },
+                    "click_element": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "number"
+                            },
+                            "xpath": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "index"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Click element"
+                    },
+                    "input_text": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "number"
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "xpath": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "index",
+                            "text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Input text into a input interactive element"
+                    },
+                    "switch_tab": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "page_id": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "page_id"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Switch tab"
+                    },
+                    "open_tab": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Open url in new tab"
+                    },
+                    "extract_content": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "goal": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "goal"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Extract page content to retrieve specific information from the page, e.g. all company names, a specifc description, all information about, links with companies in structured format or simply links"
+                    },
+                    "scroll_down": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "type": "number"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Scroll down the page by pixel amount - if no amount is specified, scroll down one page"
+                    },
+                    "scroll_up": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "#/properties/action/items/properties/scroll_down/anyOf/1"
+                        }
+                      ],
+                      "description": "Scroll up the page by pixel amount - if no amount is specified, scroll up one page"
+                    },
+                    "send_keys": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "keys": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "keys"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Send strings of special keys like Escape,Backspace, Insert, PageDown, Delete, Enter, Shortcuts such as `Control+o`, `Control+Shift+T` are supported as well. This gets used in keyboard.press."
+                    },
+                    "scroll_to_text": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "If you dont find something which you want to interact with, scroll to it"
+                    },
+                    "get_dropdown_options": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "index"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Get all options from a native dropdown"
+                    },
+                    "select_dropdown_option": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "number"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "index",
+                            "text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Select dropdown option for interactive element index by the text of the option you want to select"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "List of actions to execute"
+              }
+            },
+            "required": [
+              "current_state",
+              "action"
+            ],
+            "additionalProperties": false,
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          }
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "function",
+      "function": {
+        "name": "AgentOutput"
+      }
+    },
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct"
+  },
+  "response": {
+    "id": "chatcmpl-db270a46-c806-425b-b313-620e683d4151",
+    "object": "chat.completion",
+    "created": 1747126810,
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_e2qk",
+              "type": "function",
+              "function": {
+                "name": "AgentOutput",
+                "arguments": "{\"current_state\":{\"evaluation_previous_goal\":\"Unknown - No previous goal\",\"memory\":\"I have no tab opened yet\",\"next_goal\":\"Search for rizrmd github on the web\"},\"action\":[{\"search_google\":{\"query\":\"rizrmd github\"}}]}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "usage": {
+      "queue_time": 0.500769293,
+      "prompt_tokens": 4836,
+      "prompt_time": 0.187056906,
+      "completion_tokens": 52,
+      "completion_time": 0.102968509,
+      "total_tokens": 4888,
+      "total_time": 0.290025415
+    },
+    "usage_breakdown": {
+      "models": null
+    },
+    "system_fingerprint": "fp_37da608fc1",
+    "x_groq": {
+      "id": "req_01jv4dyxfyet29xwkzaxw2vnbg"
+    }
+  }
+}
