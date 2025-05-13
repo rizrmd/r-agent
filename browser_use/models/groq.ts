@@ -162,6 +162,70 @@ export class ChatGroqAI extends BaseChatModel {
       console.error("Groq API Error: No choices returned", responseData);
       throw new Error("Groq API request returned no choices.");
     }
-    return responseData.choices[0].message;
+    const message = responseData.choices[0].message;
+
+    const cleanStringField = (inputStr: string): string => {
+      let S = inputStr.trim();
+
+      // Step 1: Remove "assistant" suffix first
+      S = S.replace(/assistant\s*$/i, "").trim();
+
+      // Step 2: Try to extract content from a Markdown code block using a general non-anchored regex.
+      const markdownExtractRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
+      const match = S.match(markdownExtractRegex);
+
+      if (match && typeof match[1] === 'string') {
+        S = match[1].trim();
+      }
+
+      // Step 3: Apply balanced brace extraction to the (potentially unwrapped) string.
+      if (S.startsWith('{') || S.startsWith('[')) {
+        let balance = 0;
+        let inString = false;
+        let escapeChar = false;
+        let fieldEndIndex = -1;
+        for (let i = 0; i < S.length; i++) {
+          const char = S[i];
+          if (escapeChar) { escapeChar = false; continue; }
+          if (char === '\\') { escapeChar = true; continue; }
+          if (char === '"') { if (!escapeChar) inString = !inString; }
+          if (inString) continue;
+          if (char === '{' || char === '[') balance++;
+          else if (char === '}' || char === ']') {
+            balance--;
+            if (balance === 0) { fieldEndIndex = i; break; }
+          }
+        }
+        if (fieldEndIndex !== -1) {
+          S = S.substring(0, fieldEndIndex + 1);
+        }
+      }
+      return S.trim();
+    };
+
+    // Clean message.content
+    if (message.content) {
+      if (typeof message.content === 'string') {
+        message.content = cleanStringField(message.content);
+      } else if (Array.isArray(message.content)) {
+        message.content = message.content.map((block: { type: string; text?: string; [key: string]: any; }) => {
+          if (block && block.type === 'text' && typeof block.text === 'string') {
+            return { ...block, text: cleanStringField(block.text) };
+          }
+          return block;
+        });
+      }
+    }
+
+    // Clean message.tool_calls arguments if present
+    if (message.tool_calls && Array.isArray(message.tool_calls)) {
+      for (const toolCall of message.tool_calls) {
+        if (toolCall.function && toolCall.function.arguments && typeof toolCall.function.arguments === 'string') {
+          toolCall.function.arguments = cleanStringField(toolCall.function.arguments);
+        }
+      }
+    }
+
+    return message;
   }
 }
