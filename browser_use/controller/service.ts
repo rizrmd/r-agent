@@ -19,7 +19,7 @@ import {
 } from "./views";
 import { Logger } from "../utils";
 import { join } from "path";
-const logger = new Logger("controller/service");
+const logger = new Logger("ctrl/service");
 
 export class Controller<Context> {
   registry: Registry<Context>;

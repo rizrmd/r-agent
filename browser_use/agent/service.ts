@@ -49,7 +49,7 @@ import {
   removeThinkTags,
 } from "./tools/agent_utils";
 
-const logger = new Logger("agent/service");
+const logger = new Logger("agnt/service");
 
 class BrowserAgent<Context extends unknown = any> {
   private task: string;
