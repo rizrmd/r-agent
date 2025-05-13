@@ -1,13 +1,10 @@
-import { BaseChatModel } from '../../models/langchain';
-import { z } from 'zod';
-import { BrowserContext } from '../../browser/context';
-import { ProductTelemetry } from '../../telemetry/service';
-import {
-  ActionRegistry,
-  RegisteredAction,
-} from './views';
+import { BaseChatModel } from "../../models/langchain";
+import { z } from "zod";
+import { BrowserContext } from "../../browser/context";
+import { ProductTelemetry } from "../../telemetry/service";
+import { ActionRegistry, RegisteredAction } from "./views";
 import { type ActionResult } from "../../agent/views";
-import { timeExecutionAsync } from '../../utils';
+import { timeExecutionAsync } from "../../utils";
 
 export interface ActionRunContext<Context = any> {
   browser: BrowserContext;
@@ -30,10 +27,13 @@ export class Registry<Context> {
   }
 
   action(args: {
-    name: string,
-    description: string,
-    paramsSchema?: z.ZodObject<any>,
-    func: (params: any, ctx: ActionRunContext<Context>) => ActionResult | Promise<ActionResult | void>;
+    name: string;
+    description: string;
+    paramsSchema?: z.ZodObject<any>;
+    func: (
+      params: any,
+      ctx: ActionRunContext<Context>
+    ) => ActionResult | Promise<ActionResult | void>;
   }) {
     if (this.exclude_actions.includes(args.name)) {
       return;
@@ -44,13 +44,13 @@ export class Registry<Context> {
       args.name,
       args.description,
       args.func,
-      actual_param_model,
+      actual_param_model
     );
 
     this.registry.actions[args.name] = action;
   }
 
-  @timeExecutionAsync('--execute_action')
+  @timeExecutionAsync("--execute_action")
   async execute_action(
     action_name: string,
     params: Record<string, any>,
@@ -78,19 +78,23 @@ export class Registry<Context> {
     }
   }
 
-  private _replace_sensitive_data(params: any, sensitive_data: Record<string, string>): any {
+  private _replace_sensitive_data(
+    params: any,
+    sensitive_data: Record<string, string>
+  ): any {
     const secret_pattern = /<secret>(.*?)<\/secret>/g;
 
     const replace_secrets = (value: any): any => {
-      if (typeof value === 'string') {
-        return value.replace(secret_pattern, (_, placeholder) =>
-          sensitive_data[placeholder] || placeholder
+      if (typeof value === "string") {
+        return value.replace(
+          secret_pattern,
+          (_, placeholder) => sensitive_data[placeholder] || placeholder
         );
       }
       if (Array.isArray(value)) {
         return value.map(replace_secrets);
       }
-      if (typeof value === 'object' && value != null) {
+      if (typeof value === "object" && value != null) {
         return Object.fromEntries(
           Object.entries(value).map(([k, v]) => [k, replace_secrets(v)])
         );
@@ -115,12 +119,13 @@ export class Registry<Context> {
     }
     const actionSchema: Record<string, z.ZodTypeAny> = {}; // Added type annotation
     for (const action of actions) {
-      actionSchema[action.name] = z.union([z.null(), action.paramsSchema], {
-        description: action.description,
-      }).optional();
+      actionSchema[action.name] = z
+        .union([z.null(), action.paramsSchema], {
+          description: action.description,
+        })
+        .optional();
     }
     const schema = z.object(actionSchema);
     return schema;
   }
-
 }

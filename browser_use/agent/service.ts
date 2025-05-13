@@ -1,47 +1,55 @@
 import * as fs from "fs";
+import z from "zod";
+import {
+  ActionResult,
+  AgentHistory,
+  AgentHistoryList,
+  AgentOutput,
+  AgentSettings,
+  AgentState,
+  AgentStepInfo
+} from "../agent/views";
 import { Browser } from "../browser/browser";
 import { BrowserContext, BrowserContextConfig } from "../browser/context";
 import { BrowserState, BrowserStateHistory } from "../browser/views";
-import { Controller } from "../controller/service";
-import { MessageManager } from "./message_manager/service";
 import {
-  AgentState,
-  AgentSettings,
-  ActionResult,
-  AgentOutput,
-  AgentOutputSchema,
-  AgentStepInfo,
-  AgentHistoryList,
-} from "../agent/views";
-import { AgentHistory } from "../agent/views";
-import { DOMHistoryElement } from "../dom/history_tree_processor/view";
+  ActionModel, // No longer a type import
+  getActionIndex,
+  setActionIndex,
+} from "../controller/registry/views";
+import { Controller } from "../controller/service";
 import { HistoryTreeProcessor } from "../dom/history_tree_processor/service";
+import { DOMHistoryElement } from "../dom/history_tree_processor/view";
 import {
   BaseChatModel,
   BaseMessage,
   HumanMessage,
   SystemMessage,
 } from "../models/langchain";
-import { PlannerPrompt, AgentMessagePrompt, SystemPrompt } from "./prompts";
 import { ProductTelemetry } from "../telemetry/service";
-import z from "zod";
-import {
-  ActionModel, // No longer a type import
-  getActionIndex,
-  setActionIndex,
-} from "../controller/registry/views";
 import { Logger } from "../utils";
-import { convertInputMessages } from "./message_manager/utils";
+import { MessageManager } from "./message_manager/service";
+import { AgentMessagePrompt, PlannerPrompt, SystemPrompt } from "./prompts";
+import {
+  convertAgentInputMessages,
+  executeGetNextAction,
+  executeMultiAct,
+} from "./tools/agent_execution";
+import {
+  determineToolCallingMethod,
+  setBrowserUseVersionAndSource,
+  setModelNames,
+  setupActionModels,
+  ToolCallingMethod,
+} from "./tools/agent_setup";
+import {
+  excludeUnset,
+  formatError,
+  generateUUID,
+  removeThinkTags,
+} from "./tools/agent_utils";
 
 const logger = new Logger("agent/service");
-
-type ToolCallingMethod =
-  | "auto"
-  | "function_calling"
-  | "json_mode"
-  | "raw"
-  | null
-  | undefined;
 
 class Agent<Context extends unknown = any> {
   private task: string;
@@ -173,18 +181,37 @@ class Agent<Context extends unknown = any> {
         consecutive_failures: 0,
         stopped: false,
         paused: false,
-        agent_id: this.generateUUID(),
+        agent_id: generateUUID(),
       });
 
     // Setup action models
-    this.setupActionModels();
-    this.setBrowserUseVersionAndSource();
+    const { AgentOutput: ao, DoneAgentOutput: dao } = setupActionModels(
+      this.controller
+    );
+    this.AgentOutput = ao;
+    this.DoneAgentOutput = dao;
+
+    const { version, source } = setBrowserUseVersionAndSource();
+    this.version = version;
+    this.source = source;
+
     this.initialActions = this.convertInitialActions(options.initialActions);
 
     // Model setup
-    this.setModelNames();
+    const { chatModelLibrary, modelName, plannerModelName } = setModelNames(
+      this.llm,
+      this.settings.planner_llm
+    );
+    this.chatModelLibrary = chatModelLibrary;
+    this.modelName = modelName;
+    this.plannerModelName = plannerModelName;
+
     this.availableActions = this.controller.registry.get_prompt_description();
-    this.toolCallingMethod = this.setToolCallingMethod();
+    this.toolCallingMethod = determineToolCallingMethod(
+      this.settings.tool_calling_method,
+      this.modelName,
+      this.chatModelLibrary
+    );
     this.settings.message_context = this.setMessageContext();
 
     // Initialize message manager
@@ -248,17 +275,6 @@ class Agent<Context extends unknown = any> {
   }
 
   // Helper methods
-  private generateUUID(): string {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-      /[xy]/g,
-      function (c) {
-        const r = (Math.random() * 16) | 0,
-          v = c === "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      }
-    );
-  }
-
   private setMessageContext(): string | undefined {
     if (this.toolCallingMethod === "raw") {
       if (this.settings.message_context) {
@@ -268,78 +284,6 @@ class Agent<Context extends unknown = any> {
       }
     }
     return this.settings.message_context;
-  }
-
-  private setBrowserUseVersionAndSource(): void {
-    try {
-      // Implementation would depend on how you want to track versions in TypeScript
-      this.version = "1.0.0"; // Placeholder
-      this.source = "npm"; // Placeholder
-    } catch (error) {
-      this.version = "unknown";
-      this.source = "unknown";
-    }
-    logger.log(`Version: ${this.version}, Source: ${this.source}`);
-  }
-
-  private setModelNames(): void {
-    this.chatModelLibrary = this.llm.constructor.name;
-    this.modelName = "Unknown";
-
-    if ("model_name" in this.llm) {
-      this.modelName = this.llm.model_name || "Unknown";
-    }
-
-    if (this.settings.planner_llm) {
-      if ("model_name" in this.settings.planner_llm) {
-        this.plannerModelName = this.settings.planner_llm.model_name;
-      } else {
-        this.plannerModelName = "Unknown";
-      }
-    }
-  }
-
-  private setupActionModels(): void {
-    const AgentModel = this.controller.registry.create_action_model();
-    this.AgentOutput = z.object({
-      current_state: AgentOutputSchema.shape.current_state,
-      action: z.array(AgentModel, {
-        description: "List of actions to execute",
-      }),
-    });
-    const DoneActionModel = this.controller.registry.create_action_model([
-      "done",
-    ]);
-    this.DoneAgentOutput = z.object({
-      current_state: AgentOutputSchema.shape.current_state,
-      action: z.array(DoneActionModel, {
-        description: "List of actions to execute",
-      }),
-    });
-  }
-
-  private setToolCallingMethod(): ToolCallingMethod {
-    const toolCallingMethod = this.settings.tool_calling_method;
-    if (toolCallingMethod === "auto") {
-      if (
-        this.modelName.includes("deepseek-reasoner") ||
-        this.modelName.includes("deepseek-r1") ||
-        this.modelName.includes("deepseek-v3")
-      ) {
-        return "raw";
-      } else if (this.chatModelLibrary === "ChatGoogleGenerativeAI" || this.chatModelLibrary === "ChatGeminiAI") {
-        return "function_calling"; // Use function_calling for Gemini as well
-      } else if (
-        this.chatModelLibrary === "ChatOpenAI" ||
-        this.chatModelLibrary === "AzureChatOpenAI"
-      ) {
-        return "function_calling";
-      } else {
-        return null;
-      }
-    } else {
-      return toolCallingMethod;
-    }
   }
 
   // Core functionality
@@ -417,8 +361,14 @@ class Agent<Context extends unknown = any> {
       tokens = this.messageManager.state.history.current_tokens;
 
       try {
-        modelOutput = await this.getNextAction(inputMessages);
-
+        modelOutput = await executeGetNextAction(
+          this.llm,
+          inputMessages,
+          this.toolCallingMethod,
+          // Use DoneAgentOutput if it's the last step, otherwise AgentOutput
+          stepInfo && stepInfo.is_last_step() ? this.DoneAgentOutput : this.AgentOutput,
+          this.modelName
+        );
         this.state.n_steps += 1;
 
         if (this.registerNewStepCallback) {
@@ -444,7 +394,18 @@ class Agent<Context extends unknown = any> {
         throw error;
       }
 
-      result = await this.multiAct(modelOutput.action);
+      result = await executeMultiAct(
+        modelOutput.action,
+        true, // checkForNewElements
+        this.browserContext!,
+        this.controller,
+        this.settings.page_extraction_llm as BaseChatModel, // Changed ! to as BaseChatModel
+        this.raiseIfStoppedOrPaused.bind(this),
+        this.browserContext?.config.wait_between_actions || 1000,
+        this.sensitiveData,
+        this.settings.available_file_paths,
+        this.context
+      );
       this.state.last_result = result;
       if (this.registerActionResultCallback) {
         await this.registerActionResultCallback(result);
@@ -475,11 +436,11 @@ class Agent<Context extends unknown = any> {
         this.state.last_result = result;
       }
     } finally {
-      const stepEndTime = Date.now();
-      const actions = modelOutput
-        ? modelOutput.action.map((a) => this.excludeUnset(a))
-        : [];
-      this.telemetry.capture({
+    const stepEndTime = Date.now();
+    const actions = modelOutput
+      ? modelOutput.action.map((a) => excludeUnset(a))
+      : [];
+    this.telemetry.capture({
         name: "agent_step",
         agentId: this.state.agent_id,
         step: this.state.n_steps,
@@ -508,7 +469,7 @@ class Agent<Context extends unknown = any> {
 
   private async handleStepError(error: Error): Promise<ActionResult[]> {
     const includeTrace = true; // In real applications, this might depend on the log level
-    let errorMsg = this.formatError(error, includeTrace);
+    let errorMsg = formatError(error, includeTrace);
     const prefix = `❌ Result failed ${this.state.consecutive_failures + 1}/${
       this.settings.max_failures
     } times:\n `;
@@ -601,101 +562,6 @@ class Agent<Context extends unknown = any> {
     this.state.history.history.push(historyItem);
   }
 
-  private excludeUnset(obj: any): any {
-    const result: any = {};
-    for (const key in obj) {
-      if (obj[key] !== undefined) {
-        result[key] = obj[key];
-      }
-    }
-    return result;
-  }
-
-  private removeThinkTags(text: string): string {
-    // Remove well-formatted <think>...</think> tags
-    text = text.replace(/<think>[\s\S]*?<\/think>/g, "");
-    // If there is an unmatched closing tag </think>, remove it and all preceding content
-    text = text.replace(/.*?<\/think>/g, "");
-    return text.trim();
-  }
-
-  private convertInputMessages(inputMessages: BaseMessage[]): BaseMessage[] {
-    if (
-      this.modelName === "deepseek-reasoner" ||
-      this.modelName.includes("deepseek-r1") ||
-      this.modelName.includes("deepseek-v3")
-    ) {
-      return convertInputMessages(inputMessages, this.modelName, true);
-    } else {
-      return inputMessages;
-    }
-  }
-
-  private async getNextAction(
-    inputMessages: BaseMessage[]
-  ): Promise<AgentOutput> {
-    inputMessages = this.convertInputMessages(inputMessages);
-
-    if (this.toolCallingMethod === "raw") {
-      const output = await this.llm.invoke(inputMessages);
-      output.content = this.removeThinkTags(String(output.content));
-      try {
-        const parsedJson = this.extractJsonFromModelOutput(output.content);
-        return this.AgentOutput.parse(parsedJson);
-      } catch (e) {
-        logger.warn(`Failed to parse model output: ${output} ${e}`);
-        throw new Error("Could not parse response.");
-      }
-    } else if (this.toolCallingMethod == null) {
-      const structuredLlm = this.llm.withStructuredOutput(
-        this.createAgentOutputTool(),
-        { includeRaw: true }
-      );
-      if (logger.isDebugEnabled()) {
-        logger.debug("getNextAction", inputMessages);
-      }
-      const response = await structuredLlm.invoke(inputMessages);
-      const parsed = response.data;
-
-      if (!response.success || !parsed) {
-        throw new Error("Could not parse response.");
-      }
-
-      return parsed;
-    } else {
-      const structuredLlm = this.llm.withStructuredOutput(
-        this.createAgentOutputTool(),
-        {
-          includeRaw: true,
-          method: this.toolCallingMethod,
-        }
-      );
-      const response = await structuredLlm.invoke(inputMessages);
-      const parsed = response.data;
-
-      if (!response.success || !parsed) {
-        throw new Error("Could not parse response.");
-      }
-
-      return parsed;
-    }
-  }
-
-  private extractJsonFromModelOutput(content: string): any {
-    // Implement logic to extract JSON from model output
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      return JSON.parse(jsonMatch[1]);
-    }
-
-    // Try to directly parse the entire content
-    try {
-      return JSON.parse(content);
-    } catch (e) {
-      throw new Error("Could not extract JSON from model output");
-    }
-  }
-
   private logAgentRun(): void {
     logger.log(`🚀 Starting task: ${this.task}`);
     logger.debug(`Version: ${this.version}, Source: ${this.source}`);
@@ -739,7 +605,18 @@ class Agent<Context extends unknown = any> {
 
       // Execute initial actions if provided
       if (this.initialActions) {
-        const result = await this.multiAct(this.initialActions, false);
+        const result = await executeMultiAct(
+          this.initialActions,
+          false, // checkForNewElements
+          this.browserContext!,
+          this.controller,
+          this.settings.page_extraction_llm as BaseChatModel, // Changed ! to as BaseChatModel
+          this.raiseIfStoppedOrPaused.bind(this),
+          this.browserContext?.config.wait_between_actions || 1000,
+          this.sensitiveData,
+          this.settings.available_file_paths,
+          this.context
+        );
         this.state.last_result = result;
       }
 
@@ -807,114 +684,11 @@ class Agent<Context extends unknown = any> {
         let outputPath = "agent_history.gif";
         if (typeof this.settings.generate_gif === "string") {
           outputPath = this.settings.generate_gif;
-        }
-
+        } // Removed extra brace here
         this.createHistoryGif(this.task, this.state.history, outputPath);
       }
-    }
-  }
-
-  private async multiAct(
-    actions: z.infer<typeof ActionModel>[] | undefined, // Use z.infer
-    checkForNewElements: boolean = true
-  ): Promise<ActionResult[]> {
-    const results: ActionResult[] = [];
-
-    if (!actions) {
-      // Added check for undefined actions
-      return results;
-    }
-
-    const cachedSelectorMap = await this.browserContext?.get_selector_map();
-    const cachedPathHashes = new Set(
-      Array.from(Object.values(cachedSelectorMap || {})).map(
-        (e) => e.hash.branch_path_hash
-      )
-    );
-
-    await this.browserContext?.remove_highlights();
-
-    for (let i = 0; i < actions.length; i++) {
-      const action = actions[i];
-
-      if (action && getActionIndex(action) != null && i !== 0) {
-        // Added check for action
-        const newState = await this.browserContext?.get_state();
-        const newPathHashes = new Set(
-          Array.from(Object.values(newState?.selector_map || {})).map(
-            (e) => e.hash.branch_path_hash
-          )
-        );
-
-        if (
-          checkForNewElements &&
-          !this.isSubset(newPathHashes, cachedPathHashes)
-        ) {
-          // The next action requires an index, but there are new elements on the page
-          const msg = `Something new appeared after action ${i} / ${actions.length}`;
-          logger.log(msg);
-          results.push({
-            extracted_content: msg,
-            include_in_memory: true,
-            is_done: false,
-          });
-          break;
-        }
-      }
-
-      try {
-        await this.raiseIfStoppedOrPaused();
-      } catch (error) {
-        break;
-      }
-      if (!action) {
-        // Skip if action is undefined
-        logger.warn(`Action at index ${i} is undefined, skipping.`);
-        continue;
-      }
-
-      const result = await this.controller.act(
-        action,
-        this.browserContext!, // Added non-null assertion
-        this.settings.page_extraction_llm,
-        this.sensitiveData,
-        this.settings.available_file_paths,
-        this.context
-      );
-
-      results.push(result);
-
-      logger.debug(`Executed action ${i + 1} / ${actions.length}`);
-      const lastMultiActResult =
-        results.length > 0 ? results[results.length - 1] : undefined;
-      if (
-        (lastMultiActResult &&
-          (lastMultiActResult.is_done || lastMultiActResult.error)) ||
-        i === actions.length - 1
-      ) {
-        // Added check for lastMultiActResult
-        break;
-      }
-
-      await new Promise((resolve) =>
-        setTimeout(
-          resolve,
-          this.browserContext?.config.wait_between_actions || 1000
-        )
-      );
-    }
-
-    return results;
-  }
-
-  private isSubset(setA: Set<any>, setB: Set<any>): boolean {
-    for (const elem of setA) {
-      if (!setB.has(elem)) {
-        return false;
-      }
-    }
-    return true;
-  }
+    } // This is the end of the finally block
+  } // This is the end of the run method
 
   private async validateOutput(): Promise<boolean> {
     const systemMsg =
@@ -1034,7 +808,7 @@ class Agent<Context extends unknown = any> {
       }
     }
 
-    const convertedMessages = this.convertInputMessages(plannerMessages);
+    const convertedMessages = convertAgentInputMessages(plannerMessages, this.modelName);
 
     // Get planner output
     const response = await this.settings.planner_llm.invoke(convertedMessages);
@@ -1046,7 +820,7 @@ class Agent<Context extends unknown = any> {
       (this.plannerModelName.includes("deepseek-r1") ||
         this.plannerModelName.includes("deepseek-reasoner"))
     ) {
-      plan = this.removeThinkTags(plan);
+      plan = removeThinkTags(plan);
     }
 
     try {
@@ -1072,7 +846,18 @@ class Agent<Context extends unknown = any> {
   ): Promise<ActionResult[]> {
     // Execute initial actions if provided
     if (this.initialActions) {
-      const result = await this.multiAct(this.initialActions);
+      const result = await executeMultiAct(
+        this.initialActions,
+        true, // checkForNewElements, assuming true for initial setup if not specified
+        this.browserContext!,
+        this.controller,
+        this.settings.page_extraction_llm as BaseChatModel, // Changed ! to as BaseChatModel
+        this.raiseIfStoppedOrPaused.bind(this),
+        this.browserContext?.config.wait_between_actions || 1000,
+        this.sensitiveData,
+        this.settings.available_file_paths,
+        this.context
+      );
       this.state.last_result = result;
       if (this.registerActionResultCallback) {
         await this.registerActionResultCallback(result);
@@ -1181,7 +966,18 @@ class Agent<Context extends unknown = any> {
       }
     }
 
-    const result = await this.multiAct(updatedActions);
+    const result = await executeMultiAct(
+      updatedActions,
+      true, // Assuming true for checkForNewElements during rerun
+      this.browserContext!,
+      this.controller,
+      this.settings.page_extraction_llm as BaseChatModel, // Changed ! to as BaseChatModel
+      this.raiseIfStoppedOrPaused.bind(this),
+      delay * 1000, // Pass delay directly
+      this.sensitiveData,
+      this.settings.available_file_paths,
+      this.context
+    );
     if (this.registerActionResultCallback) {
       await this.registerActionResultCallback(result);
     }
@@ -1335,14 +1131,6 @@ class Agent<Context extends unknown = any> {
     fs.writeFileSync(target, JSON.stringify(conversation, null, 2), {
       encoding: (this.settings.save_conversation_path as "utf-8") || "utf-8",
     });
-  }
-
-  private createAgentOutputTool() {
-    return {
-      name: "AgentOutput",
-      schema: this.AgentOutput,
-      description: "AgentOutput model with custom actions",
-    };
   }
 
   private createHistoryGif(
