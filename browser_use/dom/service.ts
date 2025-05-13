@@ -79,6 +79,22 @@ export class DomService {
     eval_page: EvalPageResult
   ): Promise<[DOMElementNode, SelectorMap]> {
 
+    if (!eval_page || typeof eval_page !== 'object') {
+      const errorMsg = 'Failed to construct DOM tree: eval_page result is invalid or undefined.';
+      logger.error(errorMsg, { eval_page_type: typeof eval_page, eval_page_value: String(eval_page).substring(0,100) });
+      throw new Error(errorMsg);
+    }
+    if (!eval_page.map || typeof eval_page.map !== 'object') {
+      const errorMsg = 'Failed to construct DOM tree: eval_page.map is invalid or undefined.';
+      logger.error(errorMsg, { map_type: typeof eval_page.map });
+      throw new Error(errorMsg);
+    }
+    if (typeof eval_page.rootId === 'undefined' || eval_page.rootId === null) {
+      const errorMsg = 'Failed to construct DOM tree: eval_page.rootId is undefined or null.';
+      logger.error(errorMsg, { rootId_type: typeof eval_page.rootId, rootId_value: eval_page.rootId });
+      throw new Error(errorMsg);
+    }
+
     const js_node_map = eval_page.map;
     const js_root_id = eval_page.rootId;
 
@@ -108,14 +124,21 @@ export class DomService {
       }
     }
 
-    const html_to_dict = node_map[js_root_id];
+    const html_to_dict = node_map[String(js_root_id)];
 
     // Clean up references
     Object.keys(node_map).forEach(key => delete node_map[key]);
     global.gc?.();
 
-    if (!html_to_dict || !(html_to_dict instanceof DOMElementNode)) {
-      throw new Error('Failed to parse HTML to dictionary');
+    if (!html_to_dict) {
+      const errorMsg = `Failed to parse HTML to dictionary: Root node with ID '${js_root_id}' not found in the constructed node_map. This might indicate an issue with the page content, the DOM extraction script (buildDomTree.js), or that the page was not fully loaded.`;
+      logger.error(errorMsg, { js_root_id, node_map_keys_sample: Object.keys(node_map).slice(0, 10) });
+      throw new Error(errorMsg);
+    }
+    if (!(html_to_dict instanceof DOMElementNode)) {
+      const errorMsg = `Failed to parse HTML to dictionary: Node with ID '${js_root_id}' was found but is not a DOMElementNode (actual type: ${html_to_dict?.constructor?.name}). This might indicate an issue with the page content or the DOM extraction script.`;
+      logger.error(errorMsg, { js_root_id, node_type: html_to_dict?.constructor?.name });
+      throw new Error(errorMsg);
     }
 
     return [html_to_dict, selector_map];
