@@ -183,3 +183,4 @@ node_modules/
 /dist
 coverage/
 package-lock.json
+/error_logs

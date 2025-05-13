@@ -721,7 +721,7 @@ class Agent<Context extends unknown = any> {
         {
           schema: ValidationResultSchema,
         },
-        { includeRaw: true }
+        { includeRaw: false }
       );
       const response = await validator.invoke(messages);
       const parsed = response.parsed as z.infer<typeof ValidationResultSchema>;

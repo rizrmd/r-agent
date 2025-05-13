@@ -330,9 +330,6 @@ export class Controller<Context> {
           }, Page: ${pageContent}`;
 
         try {
-          await Bun.file(
-            join(process.cwd(), "logs", Date.now() + ".txt")
-          ).write(prompt);
           const output = await ctx.page_extraction_llm!.invoke([
             new HumanMessage({ content: prompt }),
           ]);
