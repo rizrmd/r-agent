@@ -1,10 +1,6 @@
-import { BaseChatModel, BaseMessage, Message, RequestParams, StructedTool } from "./langchain";
-import { formatToolCall, formatTools } from "./langchain";
+import { BaseChatModel, BaseMessage, formatToolCall, formatTools, RequestParams, StructedTool } from "./langchain";
 
-/**
- * ernie 4.0 chat
- */
-export class ChatQianfan extends BaseChatModel {
+export class ChatGroqAI extends BaseChatModel {
     timeout?: number;
     temperature?: number;
     apiKey?: string;
@@ -21,13 +17,13 @@ export class ChatQianfan extends BaseChatModel {
         this.timeout = params.timeout || 60000;
         this.temperature = params.temperature || 0.7;
         this.apiKey = params.apiKey;
-        this.baseUrl = params.baseUrl || 'https://qianfan.baidubce.com/v2';
+        this.baseUrl = params.baseUrl || 'https://api.groq.com/openai/v1';
     }
 
     formatMessages(rawMessages: BaseMessage[], tool: StructedTool): RequestParams {
-        const messages: Message[] = [];
+        const messages: any[] = [];
         for (const m of rawMessages) {
-            const newMsg: Message = {
+            const newMsg: Record<string, any> = {
                 role: 'user',
                 content: m.content,
             };
@@ -43,43 +39,11 @@ export class ChatQianfan extends BaseChatModel {
             else if (m.type === 'tool') {
                 newMsg.role = 'tool';
                 newMsg.tool_call_id = m.tool_call_id;
-                if (!newMsg.content) {
-                    newMsg.content = 'Done';
-                }
             }
             else if (m.type === 'system') {
                 newMsg.role = 'system';
             }
-
-            // 适配 千帆 不支持连续对话的问题
-            const lastMsg = messages[messages.length - 1];
-            if (lastMsg?.role === newMsg.role) {
-                if (Array.isArray(newMsg.content) && Array.isArray(lastMsg.content)) {
-                    lastMsg.content.push(...newMsg.content);
-                    continue;
-                }
-                else if (Array.isArray(newMsg.content) && typeof lastMsg.content === 'string') {
-                    newMsg.content[0].text = lastMsg.content + newMsg.content[0].text;
-                    messages.pop();
-                    messages.push(newMsg);
-                    continue;
-                }
-                else if (typeof newMsg.content === 'string') {
-                    if (typeof lastMsg.content === 'string') {
-                        lastMsg.content += newMsg.content;
-                        continue;
-                    }
-                }
-            }
             messages.push(newMsg);
-            // tool 后面加一个 assistant 消息
-            if (newMsg.role === 'tool') {
-                const assistantMsg = {
-                    role: 'assistant',
-                    content: '',
-                };
-                messages.push(assistantMsg);
-            }
         }
         return {messages, ...(tool ? formatTools([tool]):{})};
     }
@@ -99,7 +63,20 @@ export class ChatQianfan extends BaseChatModel {
             method: 'post',
             headers,
             body,
-        }).then(response => response.json());
-        return response.choices[0].message;
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`Groq API Error: ${response.status} ${response.statusText}`, errorBody);
+            throw new Error(`Groq API request failed with status ${response.status}: ${errorBody}`);
+        }
+
+        const responseData = await response.json();
+
+        if (!responseData.choices || responseData.choices.length === 0) {
+            console.error('Groq API Error: No choices returned', responseData);
+            throw new Error('Groq API request returned no choices.');
+        }
+        return responseData.choices[0].message;
     }
 }

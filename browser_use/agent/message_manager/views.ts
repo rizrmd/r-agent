@@ -104,16 +104,21 @@ export class MessageHistory {
       !(msg.message instanceof SystemMessage)
     );
     if (index !== -1) {
-      this.current_tokens -= this.messages[index].metadata.tokens;
+      const messageToRemove = this.messages[index];
+      if (messageToRemove && messageToRemove.metadata) {
+        this.current_tokens -= messageToRemove.metadata.tokens;
+      }
       this.messages.splice(index, 1);
     }
   }
 
   removeLastStateMessage(): void {
-    if (this.messages.length > 2 &&
-      this.messages[this.messages.length - 1].message instanceof HumanMessage) {
-      this.current_tokens -= this.messages[this.messages.length - 1].metadata.tokens;
-      this.messages.pop();
+    if (this.messages.length > 2) {
+      const lastMessage = this.messages[this.messages.length - 1];
+      if (lastMessage && lastMessage.message instanceof HumanMessage && lastMessage.metadata) {
+        this.current_tokens -= lastMessage.metadata.tokens;
+        this.messages.pop();
+      }
     }
   }
 }

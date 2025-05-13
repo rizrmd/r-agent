@@ -30,9 +30,7 @@ export class RegisteredAction {
   }
 }
 
-export const ActionModelSchema = z.record(z.record(z.any()));
-
-export type ActionModel = z.infer<typeof ActionModelSchema>;
+export const ActionModel = z.record(z.record(z.any())); // ActionModel is now the Zod schema itself
 
 export function getActionIndex(action: Record<string, { index?: number }>): number | null {
   return Object.values(action)?.[0]?.index || null;

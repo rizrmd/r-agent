@@ -63,7 +63,20 @@ export class ChatOpenAI extends BaseChatModel {
             method: 'post',
             headers,
             body,
-        }).then(response => response.json());
-        return response.choices[0].message;
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`OpenAI API Error: ${response.status} ${response.statusText}`, errorBody);
+            throw new Error(`OpenAI API request failed with status ${response.status}: ${errorBody}`);
+        }
+
+        const responseData = await response.json();
+
+        if (!responseData.choices || responseData.choices.length === 0) {
+            console.error('OpenAI API Error: No choices returned', responseData);
+            throw new Error('OpenAI API request returned no choices.');
+        }
+        return responseData.choices[0].message;
     }
 }

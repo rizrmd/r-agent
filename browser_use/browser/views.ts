@@ -1,4 +1,4 @@
-import { DOMState, DOMElementNode, SelectorMap } from "../dom/views";
+import { DOMState, DOMElementNode, type SelectorMap } from "../dom/views";
 
 // Equivalent to Python's DOMHistoryElement
 interface DOMHistoryElement {
@@ -49,11 +49,11 @@ export class BrowserState extends DOMState {
 
 // Dataclass equivalent
 export class BrowserStateHistory {
-  url: string;
-  title: string;
-  tabs: TabInfo[];
-  interacted_element: (DOMHistoryElement | null)[];
-  screenshot: string | null;
+  url: string = "";
+  title: string = "";
+  tabs: TabInfo[] = [];
+  interacted_element: (DOMHistoryElement | null)[] = [];
+  screenshot: string | null = null;
 
   constructor(data: {
     url: string,

@@ -1,4 +1,4 @@
-import { Page } from 'playwright';
+import type { Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DOMBaseNode, DOMElementNode, DOMState, DOMTextNode, SelectorMap } from './views';
@@ -100,8 +100,10 @@ export class DomService {
           if (!(child_id in node_map)) continue;
 
           const child_node = node_map[child_id];
-          child_node.parent = node;
-          node.children.push(child_node);
+          if (child_node) { // Added check for undefined child_node
+            child_node.parent = node;
+            node.children.push(child_node);
+          }
         }
       }
     }

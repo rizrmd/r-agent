@@ -2,24 +2,29 @@
  * Playwright browser on steroids.
  */
 
-import { Browser as PlaywrightBrowser } from 'playwright';
-import { BrowserContext as PlaywrightBrowserContext } from 'playwright';
-import { ElementHandle, FrameLocator, Page } from 'playwright';
-import * as fs from 'fs';
-import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import type { Browser as PlaywrightBrowser } from "playwright";
+import type { BrowserContext as PlaywrightBrowserContext } from "playwright";
+import type { ElementHandle, FrameLocator, Page } from "playwright";
+import * as fs from "fs";
+import * as path from "path";
+import { v4 as uuidv4 } from "uuid";
 
 // Importing equivalent views and services
-import { BrowserError, BrowserState, TabInfo, URLNotAllowedError } from './views';
-import { DomService } from '../dom/service';
-import { DOMElementNode, SelectorMap } from '../dom/views';
-import { timeExecutionAsync, timeExecutionSync } from '../utils';
+import {
+  BrowserError,
+  BrowserState,
+  type TabInfo,
+  URLNotAllowedError,
+} from "./views";
+import { DomService } from "../dom/service";
+import { DOMElementNode, type SelectorMap } from "../dom/views";
+import { timeExecutionAsync, timeExecutionSync } from "../utils";
 import { Browser } from "./browser";
-import { Logger } from '../utils';
+import { Logger } from "../utils";
 
-export { Browser } from 'playwright';
+export type { Browser } from "playwright";
 
-const logger = new Logger('browser_context');
+const logger = new Logger("browser_context");
 
 // TypeScript equivalent of TypedDict
 interface BrowserContextWindowSize {
@@ -28,19 +33,19 @@ interface BrowserContextWindowSize {
 }
 
 interface CDPTarget {
-  /** 目标描述 */
+  /** Target description */
   description: string;
-  /** DevTools 前端 URL */
+  /** DevTools frontend URL */
   devtoolsFrontendUrl: string;
-  /** 目标 ID */
+  /** Target ID */
   id: string;
-  /** 页面标题 */
+  /** Page title */
   title: string;
-  /** 目标类型 (page, iframe, background_page, service_worker, etc.) */
+  /** Target type (page, iframe, background_page, service_worker, etc.) */
   type: string;
-  /** 页面 URL */
+  /** Page URL */
   url: string;
-  /** WebSocket 调试器 URL */
+  /** WebSocket debugger URL */
   webSocketDebuggerUrl: string;
 }
 
@@ -121,7 +126,8 @@ class BrowserContextConfig {
   save_downloads_path: string | null = null;
   trace_path: string | null = null;
   locale: string | null = null;
-  user_agent: string = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36';
+  user_agent: string =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36";
 
   highlight_elements: boolean = true;
   viewport_expansion: number = 500;
@@ -129,7 +135,7 @@ class BrowserContextConfig {
   include_dynamic_attributes: boolean = true;
 
   force_keep_context_alive: boolean = false;
-  mode?: 'chromium' | 'electron' | 'electron-view';
+  mode?: "chromium" | "electron" | "electron-view";
 }
 
 interface BrowserSession {
@@ -160,12 +166,14 @@ class BrowserContext {
     state: BrowserContextState | null = null
   ) {
     this.context_id = uuidv4();
-    logger.debug(`Initializing new browser context with id: ${this.context_id}`);
+    logger.debug(
+      `Initializing new browser context with id: ${this.context_id}`
+    );
 
     this.config = config;
     this.browser = browser;
     this.state = state || {
-      target_id: null
+      target_id: null,
     };
     if (!this.config.mode) {
       this.config.mode = browser.config.mode;
@@ -179,12 +187,12 @@ class BrowserContext {
     await this.close();
   }
 
-  @timeExecutionAsync('--close')
+  @timeExecutionAsync("--close")
   async close(): Promise<void> {
     /**
      * Close the browser instance
      */
-    logger.debug('Closing browser context');
+    logger.debug("Closing browser context");
 
     try {
       if (this.session == null) {
@@ -195,7 +203,7 @@ class BrowserContext {
       if (this._page_event_handler && this.session.context) {
         try {
           // This actually sends a CDP command to unsubscribe
-          this.session.context.removeListener('page', this._page_event_handler);
+          this.session.context.removeListener("page", this._page_event_handler);
         } catch (e) {
           logger.debug(`Failed to remove CDP listener: ${e}`);
         }
@@ -207,7 +215,7 @@ class BrowserContext {
       if (this.config.trace_path) {
         try {
           await this.session.context.tracing.stop({
-            path: path.join(this.config.trace_path, `${this.context_id}.zip`)
+            path: path.join(this.config.trace_path, `${this.context_id}.zip`),
           });
         } catch (e) {
           logger.debug(`Failed to stop tracing: ${e}`);
@@ -229,42 +237,46 @@ class BrowserContext {
     }
   }
 
-  @timeExecutionAsync('--initialize_session')
+  @timeExecutionAsync("--initialize_session")
   async initialize_session(): Promise<BrowserSession> {
     /**
      * Initialize the browser session
      */
-    logger.debug('Initializing browser context');
+    logger.debug("Initializing browser context");
 
     const playwright_browser = await this.browser.get_playwright_browser();
     const context = await this.create_context(playwright_browser);
-    this._page_event_handler = null;
+    this.add_new_page_listener(context); // Ensures 'page' event listener is set up
 
     // Get or create a page to use
     const pages = context.pages();
 
     this.session = {
       context,
-      cached_state: null
+      cached_state: null,
     };
 
-    let active_page: Page = null;
+    let active_page: Page | null = null;
     if (this.browser.config.cdp_url) {
-      if (this.config.mode === 'electron-view') {
+      if (this.config.mode === "electron-view") {
         if (!this.browser.config.electronWebviewContext) {
-          throw new BrowserError('electron-view mode not provide electronWebviewContext');
+          throw new BrowserError(
+            "electron-view mode not provide electronWebviewContext"
+          );
         }
         await this.browser.config.electronWebviewContext.init(this.session);
       }
 
       // If we have a saved target ID, try to find and activate it
       if (this.state.target_id) {
-        const targets = await this._get_cdp_targets();
+        const targets = await this._get_cdp_targets(); // Assuming _get_cdp_targets returns CDPTarget[]
         for (const target of targets) {
-          if (target['targetId'] === this.state.target_id) {
+          if (target.id === this.state.target_id) {
+            // Changed from target["targetId"]
             // Find matching page by URL
             for (const page of pages) {
-              if (page.url() === target['url']) {
+              if (page.url() === target.url) {
+                // Changed from target["url"]
                 active_page = page;
                 break;
               }
@@ -274,33 +286,45 @@ class BrowserContext {
         }
       }
 
-      if (!active_page && this.config.mode === 'electron-view') {
-        const pages = await this.browser.config.electronWebviewContext.pages(this.session);
-        if (pages.length > 0) {
-          active_page = pages[0];
+      if (!active_page && this.config.mode === "electron-view") {
+        if (!this.browser.config.electronWebviewContext) {
+          // Added check
+          throw new BrowserError(
+            "electron-view mode requires electronWebviewContext but it's not available."
+          );
         }
-        else {
-          active_page = await this.browser.config.electronWebviewContext.newPage(this.session);
+        const electronPages =
+          await this.browser.config.electronWebviewContext.pages(this.session);
+        if (electronPages.length > 0) {
+          active_page = electronPages[0] ?? null; // Handle potential undefined from pages[0]
+        } else {
+          active_page =
+            await this.browser.config.electronWebviewContext.newPage(
+              this.session
+            );
         }
       }
     }
 
     // If no target ID or couldn't find it, use existing page or create new
     if (!active_page) {
-      if (pages.length) {
+      if (pages.length > 0) {
+        // Check if pages array is not empty
         active_page = await this.getActivePage(pages);
-        logger.debug('Using existing page');
+        logger.debug("Using existing page");
       } else {
         active_page = await context.newPage();
-        logger.debug('Created new page');
+        logger.debug("Created new page");
       }
 
       // Get target ID for the active page
-      if (this.browser.config.cdp_url) {
+      if (this.browser.config.cdp_url && active_page) {
+        // Added null check for active_page
         const targets = await this._get_cdp_targets();
         for (const target of targets) {
-          if (target['url'] === active_page.url()) {
-            this.state.target_id = target['targetId'];
+          if (target.url === active_page.url()) {
+            // Changed from target["url"]
+            this.state.target_id = target.id; // Changed from target["targetId"]
             break;
           }
         }
@@ -308,21 +332,39 @@ class BrowserContext {
     }
 
     // Bring page to front
-    await active_page.bringToFront();
-    await active_page.waitForLoadState('load');
+    if (active_page) {
+      // Added null check for active_page
+      await active_page.bringToFront();
+      await active_page.waitForLoadState("load");
+    } else {
+      // This path implies no page could be activated or created.
+      // Depending on application logic, this might be an error state.
+      logger.warn("No active page could be set during session initialization.");
+      // Consider if throwing an error here is more appropriate if an active page is mandatory.
+    }
 
     return this.session;
   }
+
   async getActivePage(pages: Page[]): Promise<Page> {
+    if (pages.length === 0) {
+      // Throw an error if no pages are provided, as the method promises to return a Page.
+      throw new Error("getActivePage called with an empty list of pages.");
+    }
     for (const page of pages) {
       // Check if this page is the active one
-      const isVisible = await page.evaluate(() => document.visibilityState === 'visible');
+      const isVisible = await page.evaluate(
+        () => document.visibilityState === "visible" // TS error: document. Handled by tsconfig.json#lib: ["DOM"]
+      );
       if (isVisible) {
         return page;
       }
     }
-    return pages[pages.length - 1];
-  };
+    // Fallback to the last page if no page is 'visible'.
+    // Non-null assertion `!` is safe due to the `pages.length === 0` check.
+    return pages[pages.length - 1]!;
+  }
+
   add_new_page_listener(context: PlaywrightBrowserContext): void {
     const on_page = async (page: Page): Promise<void> => {
       if (this.browser.config.cdp_url) {
@@ -336,7 +378,7 @@ class BrowserContext {
     };
 
     this._page_event_handler = on_page;
-    context.on('page', on_page);
+    context.on("page", on_page);
   }
 
   async get_session(): Promise<BrowserSession> {
@@ -354,17 +396,35 @@ class BrowserContext {
     return await this.session_get_current_page(session);
   }
 
-  async create_context(browser: PlaywrightBrowser): Promise<PlaywrightBrowserContext> {
+  async create_context(
+    browser: PlaywrightBrowser
+  ): Promise<PlaywrightBrowserContext> {
     /**
      * Creates a new browser context with anti-detection measures and loads cookies if available.
      */
     let context: PlaywrightBrowserContext;
 
     if (this.browser.config.cdp_url && browser.contexts().length > 0) {
-      context = browser.contexts()[0];
-    } else if (this.browser.config.chrome_instance_path && browser.contexts().length > 0) {
-      // Connect to existing Chrome instance instead of creating new one
-      context = browser.contexts()[0];
+      const existingContext = browser.contexts()[0];
+      if (!existingContext) {
+        // Added check for undefined
+        throw new Error(
+          "Playwright browser reported contexts available, but the first one was undefined."
+        );
+      }
+      context = existingContext;
+    } else if (
+      this.browser.config.chrome_instance_path &&
+      browser.contexts().length > 0
+    ) {
+      const existingContext = browser.contexts()[0];
+      if (!existingContext) {
+        // Added check for undefined
+        throw new Error(
+          "Playwright browser reported contexts available (chrome_instance_path), but the first one was undefined."
+        );
+      }
+      context = existingContext;
     } else {
       // Original code for creating new context
       context = await browser.newContext({
@@ -373,23 +433,31 @@ class BrowserContext {
         javaScriptEnabled: true,
         bypassCSP: this.config.disable_security,
         ignoreHTTPSErrors: this.config.disable_security,
-        recordVideo: this.config.save_recording_path ? {
-          dir: this.config.save_recording_path,
-          size: this.config.browser_window_size
-        } : undefined,
-        locale: this.config.locale || undefined
+        recordVideo: this.config.save_recording_path
+          ? {
+              dir: this.config.save_recording_path,
+              size: this.config.browser_window_size,
+            }
+          : undefined,
+        locale: this.config.locale || undefined,
       });
     }
 
     if (this.config.trace_path) {
-      await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+      await context.tracing.start({
+        screenshots: true,
+        snapshots: true,
+        sources: true,
+      });
     }
 
     // Load cookies if they exist
     if (this.config.cookies_file && fs.existsSync(this.config.cookies_file)) {
-      const cookiesData = fs.readFileSync(this.config.cookies_file, 'utf8');
+      const cookiesData = fs.readFileSync(this.config.cookies_file, "utf8");
       const cookies = JSON.parse(cookiesData);
-      logger.info(`Loaded ${cookies.length} cookies from ${this.config.cookies_file}`);
+      logger.info(
+        `Loaded ${cookies.length} cookies from ${this.config.cookies_file}`
+      );
       await context.addCookies(cookies);
     }
 
@@ -439,88 +507,98 @@ window.navigator.permissions.query = (parameters) => (
 
     // Define relevant resource types and content types
     const RELEVANT_RESOURCE_TYPES = new Set([
-      'document',
-      'stylesheet',
-      'image',
-      'font',
-      'script',
-      'iframe',
+      "document",
+      "stylesheet",
+      "image",
+      "font",
+      "script",
+      "iframe",
     ]);
 
     const RELEVANT_CONTENT_TYPES = new Set([
-      'text/html',
-      'text/css',
-      'application/javascript',
-      'image/',
-      'font/',
-      'application/json',
+      "text/html",
+      "text/css",
+      "application/javascript",
+      "image/",
+      "font/",
+      "application/json",
     ]);
 
     // Additional patterns to filter out
     const IGNORED_URL_PATTERNS = new Set([
       // Analytics and tracking
-      'analytics',
-      'tracking',
-      'telemetry',
-      'beacon',
-      'metrics',
+      "analytics",
+      "tracking",
+      "telemetry",
+      "beacon",
+      "metrics",
       // Ad-related
-      'doubleclick',
-      'adsystem',
-      'adserver',
-      'advertising',
+      "doubleclick",
+      "adsystem",
+      "adserver",
+      "advertising",
       // Social media widgets
-      'facebook.com/plugins',
-      'platform.twitter',
-      'linkedin.com/embed',
+      "facebook.com/plugins",
+      "platform.twitter",
+      "linkedin.com/embed",
       // Live chat and support
-      'livechat',
-      ,
-      'zendesk',
-      'intercom',
-      'crisp.chat',
-      'hotjar',
+      "livechat",
+      "zendesk",
+      "intercom",
+      "crisp.chat",
+      "hotjar",
       // Push notifications
-      'push-notifications',
-      'onesignal',
-      'pushwoosh',
+      "push-notifications",
+      "onesignal",
+      "pushwoosh",
       // Background sync/heartbeat
-      'heartbeat',
-      'ping',
-      'alive',
+      "heartbeat",
+      "ping",
+      "alive",
       // WebRTC and streaming
-      'webrtc',
-      'rtmp://',
-      'wss://',
+      "webrtc",
+      "rtmp://",
+      "wss://",
       // Common CDNs for dynamic content
-      'cloudfront.net',
-      'fastly.net',
+      "cloudfront.net",
+      "fastly.net",
     ]);
     const onRequest = async (request: any): Promise<void> => {
-      // 按资源类型过滤
+      // Filter by resource type
       if (!RELEVANT_RESOURCE_TYPES.has(request.resourceType())) {
         return;
       }
 
-      // 过滤流媒体、websocket和其他实时请求
-      if (['websocket', 'media', 'eventsource', 'manifest', 'other'].includes(request.resourceType())) {
+      // Filter out streaming, websocket, and other real-time requests
+      if (
+        ["websocket", "media", "eventsource", "manifest", "other"].includes(
+          request.resourceType()
+        )
+      ) {
         return;
       }
 
-      // 按URL模式过滤
+      // Filter by URL pattern
       const url = request.url().toLowerCase();
-      if (Array.from(IGNORED_URL_PATTERNS).some(pattern => url.includes(pattern))) {
+      if (
+        Array.from(IGNORED_URL_PATTERNS).some((pattern) =>
+          url.includes(pattern)
+        )
+      ) {
         return;
       }
 
-      // 过滤data URL和blob URL
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
+      // Filter out data URLs and blob URLs
+      if (url.startsWith("data:") || url.startsWith("blob:")) {
         return;
       }
 
-      // 过滤带有特定头部的请求
+      // Filter requests with specific headers
       const headers = request.headers();
-      if (headers['purpose'] === 'prefetch' || ['video', 'audio'].includes(headers['sec-fetch-dest'])) {
+      if (
+        headers["purpose"] === "prefetch" ||
+        ["video", "audio"].includes(headers["sec-fetch-dest"])
+      ) {
         return;
       }
 
@@ -534,26 +612,42 @@ window.navigator.permissions.query = (parameters) => (
         return;
       }
 
-      // 按内容类型过滤（如果可用）
-      const contentType = (response.headers()['content-type'] || '').toLowerCase();
+      // Filter by content type (if available)
+      const contentType = (
+        response.headers()["content-type"] || ""
+      ).toLowerCase();
 
-      // 如果内容类型表示流媒体或实时数据，则跳过
-      if (['streaming', 'video', 'audio', 'webm', 'mp4', 'event-stream', 'websocket', 'protobuf'].some(
-        t => contentType.includes(t)
-      )) {
+      // Skip if content type indicates streaming or real-time data
+      if (
+        [
+          "streaming",
+          "video",
+          "audio",
+          "webm",
+          "mp4",
+          "event-stream",
+          "websocket",
+          "protobuf",
+        ].some((t) => contentType.includes(t))
+      ) {
         pendingRequests.delete(request);
         return;
       }
 
-      // 只处理相关内容类型
-      if (!Array.from(RELEVANT_CONTENT_TYPES).some(ct => contentType.includes(ct))) {
+      // Only process relevant content types
+      if (
+        !Array.from(RELEVANT_CONTENT_TYPES).some((ct) =>
+          contentType.includes(ct)
+        )
+      ) {
         pendingRequests.delete(request);
         return;
       }
 
-      // 如果响应太大（可能对页面加载不重要），则跳过
-      const contentLength = response.headers()['content-length'];
-      if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) { // 5MB
+      // Skip if response is too large (likely not important for page load)
+      const contentLength = response.headers()["content-length"];
+      if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
+        // 5MB
         pendingRequests.delete(request);
         return;
       }
@@ -562,74 +656,91 @@ window.navigator.permissions.query = (parameters) => (
       lastActivity = Date.now();
     };
 
-    // 添加事件监听器
-    page.on('request', onRequest);
-    page.on('response', onResponse);
+    // Add event listeners
+    page.on("request", onRequest);
+    page.on("response", onResponse);
 
     try {
-      // 等待空闲时间
+      // Wait for idle time
       const startTime = Date.now();
       while (true) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         const now = Date.now();
-        if (pendingRequests.size === 0 && (now - lastActivity) >= this.config.wait_for_network_idle_page_load_time * 1000) {
+        if (
+          pendingRequests.size === 0 &&
+          now - lastActivity >=
+            this.config.wait_for_network_idle_page_load_time * 1000
+        ) {
           break;
         }
         if (now - startTime > this.config.maximum_wait_page_load_time * 1000) {
           logger.debug(
             `Network timeout after ${this.config.maximum_wait_page_load_time}s with ${pendingRequests.size} ` +
-            `pending requests: ${Array.from(pendingRequests).map((r: any) => r.url())}`
+              `pending requests: ${Array.from(pendingRequests).map((r: any) =>
+                r.url()
+              )}`
           );
           break;
         }
       }
     } finally {
-      // 清理事件监听器
-      page.removeListener('request', onRequest);
-      page.removeListener('response', onResponse);
+      // Clean up event listeners
+      page.removeListener("request", onRequest);
+      page.removeListener("response", onResponse);
     }
 
-    logger.debug(`Network stabilized for ${this.config.wait_for_network_idle_page_load_time} seconds`);
+    logger.debug(
+      `Network stabilized for ${this.config.wait_for_network_idle_page_load_time} seconds`
+    );
   }
 
-  async wait_for_page_and_frames_load(timeout_overwrite: number | null = null): Promise<void> {
+  async wait_for_page_and_frames_load(
+    timeout_overwrite: number | null = null
+  ): Promise<void> {
     /**
-     * 确保页面完全加载后再继续。
-     * 等待网络空闲或最小等待时间，以较长者为准。
-     * 还检查加载的URL是否被允许。
+     * Ensure the page is fully loaded before proceeding.
+     * Wait for network idle or minimum wait time, whichever is longer.
+     * Also checks if the loaded URL is allowed.
      */
-    // 开始计时
+    // Start timing
     const startTime = Date.now();
 
-    // 等待页面加载
+    // Wait for page load
     try {
       await this.wait_for_stable_network();
 
-      // 检查加载的URL是否被允许
+      // Check if the loaded URL is allowed
       const page = await this.get_current_page();
       await this.check_and_handle_navigation(page);
     } catch (e) {
       if (e instanceof URLNotAllowedError) {
         throw e;
       }
-      logger.warning('Page load failed, continuing...');
+      logger.warning("Page load failed, continuing...");
     }
 
-    // 计算剩余时间以满足最小等待时间
+    // Calculate remaining time to meet minimum wait time
     const elapsed = (Date.now() - startTime) / 1000;
-    const remaining = Math.max((timeout_overwrite || this.config.minimum_wait_page_load_time) - elapsed, 0);
+    const remaining = Math.max(
+      (timeout_overwrite || this.config.minimum_wait_page_load_time) - elapsed,
+      0
+    );
 
-    logger.debug(`--Page loaded in ${elapsed.toFixed(2)} seconds, waiting for additional ${remaining.toFixed(2)} seconds`);
+    logger.debug(
+      `--Page loaded in ${elapsed.toFixed(
+        2
+      )} seconds, waiting for additional ${remaining.toFixed(2)} seconds`
+    );
 
-    // 如果需要，等待剩余时间
+    // Wait for remaining time if needed
     if (remaining > 0) {
-      await new Promise(resolve => setTimeout(resolve, remaining * 1000));
+      await new Promise((resolve) => setTimeout(resolve, remaining * 1000));
     }
   }
 
   private _is_url_allowed(url: string): boolean {
     /**
-     * 根据白名单配置检查URL是否被允许。
+     * Check if the URL is allowed based on the whitelist configuration.
      */
     if (!this.config.allowed_domains) {
       return true;
@@ -639,24 +750,28 @@ window.navigator.permissions.query = (parameters) => (
       const parsedUrl = new URL(url);
       let domain = parsedUrl.hostname.toLowerCase();
 
-      // 如果存在端口号，则移除
-      if (domain.includes(':')) {
-        domain = domain.split(':')[0];
+      // Remove port number if present
+      if (domain.includes(":")) {
+        const domainParts = domain.split(":");
+        domain = domainParts[0] ?? ""; // Ensure domain is a string, use empty string as fallback
       }
 
-      // 检查域名是否匹配任何允许的域名模式
+      // Check if the domain matches any allowed domain patterns
       return this.config.allowed_domains.some(
-        allowedDomain => domain === allowedDomain.toLowerCase() || domain.endsWith('.' + allowedDomain.toLowerCase())
+        (allowedDomain) =>
+          domain === allowedDomain.toLowerCase() ||
+          domain.endsWith("." + allowedDomain.toLowerCase())
       );
-    } catch (e) {
-      logger.error(`Error checking URL allowlist: ${e}`);
+    } catch (e: any) {
+      // Typed the caught error
+      logger.error(`Error checking URL allowlist: ${(e as Error).message}`); // Safely access message
       return false;
     }
   }
 
   async check_and_handle_navigation(page: Page): Promise<void> {
     /**
-     * 检查当前页面URL是否被允许，如果不允许则处理。
+     * Check if the current page URL is allowed, and handle it if not.
      */
     if (!this._is_url_allowed(page.url())) {
       logger.warning(`Navigation to non-allowed URL detected: ${page.url()}`);
@@ -665,13 +780,15 @@ window.navigator.permissions.query = (parameters) => (
       } catch (e) {
         logger.error(`Failed to go back after detecting non-allowed URL: ${e}`);
       }
-      throw new URLNotAllowedError(`Navigation to non-allowed URL: ${page.url()}`);
+      throw new URLNotAllowedError(
+        `Navigation to non-allowed URL: ${page.url()}`
+      );
     }
   }
 
   async navigate_to(url: string): Promise<void> {
     /**
-     * 导航到URL
+     * Navigate to a URL
      */
     if (!this._is_url_allowed(url)) {
       throw new BrowserError(`Navigation to non-allowed URL: ${url}`);
@@ -684,7 +801,7 @@ window.navigator.permissions.query = (parameters) => (
 
   async refresh_page(): Promise<void> {
     /**
-     * 刷新当前页面
+     * Refresh the current page
      */
     const page = await this.get_current_page();
     await page.reload();
@@ -693,51 +810,51 @@ window.navigator.permissions.query = (parameters) => (
 
   async go_back(): Promise<void> {
     /**
-     * 在历史记录中后退
+     * Go back in history
      */
     const page = await this.get_current_page();
     try {
-      // 10毫秒超时
-      await page.goBack({ timeout: 10, waitUntil: 'domcontentloaded' });
+      // 10ms timeout
+      await page.goBack({ timeout: 10, waitUntil: "domcontentloaded" });
     } catch (e) {
-      // 即使没有完全加载也继续，因为我们稍后会等待页面加载
+      // Continue even if not fully loaded, as we will wait for page load later
       logger.debug(`During go_back: ${e}`);
     }
   }
 
   async go_forward(): Promise<void> {
     /**
-     * 在历史记录中前进
+     * Go forward in history
      */
     const page = await this.get_current_page();
     try {
-      await page.goForward({ timeout: 10, waitUntil: 'domcontentloaded' });
+      await page.goForward({ timeout: 10, waitUntil: "domcontentloaded" });
     } catch (e) {
-      // 即使没有完全加载也继续，因为我们稍后会等待页面加载
+      // Continue even if not fully loaded, as we will wait for page load later
       logger.debug(`During go_forward: ${e}`);
     }
   }
 
   async close_current_tab(): Promise<void> {
     /**
-     * 关闭当前标签页
+     * Close the current tab
      */
     const session = await this.get_session();
     const page = await this.session_get_current_page(session);
     await page.close();
 
-    // 如果存在，切换到第一个可用标签页
+    // Switch to the first available tab if present
     const pages = await this.session_get_pages(session);
     if (pages.length) {
       await this.switch_to_tab(0);
     }
 
-    // 否则浏览器将被关闭
+    // Otherwise, the browser will be closed
   }
 
   async get_page_html(): Promise<string> {
     /**
-     * 获取当前页面的HTML内容
+     * Get the HTML content of the current page
      */
     const page = await this.get_current_page();
     return await page.content();
@@ -745,7 +862,7 @@ window.navigator.permissions.query = (parameters) => (
 
   async execute_javascript(script: string): Promise<any> {
     /**
-     * 在页面上执行JavaScript代码
+     * Execute JavaScript code on the page
      */
     const page = await this.get_current_page();
     return await page.evaluate(script);
@@ -753,7 +870,7 @@ window.navigator.permissions.query = (parameters) => (
 
   async get_page_structure(): Promise<string> {
     /**
-     * 获取页面结构的调试视图，包括iframe
+     * Get a debug view of the page structure, including iframes
      */
     const debugScript = `(() => {
   function getPageStructure(element = document, depth = 0, maxDepth = 10) {
@@ -762,21 +879,21 @@ window.navigator.permissions.query = (parameters) => (
     const indent = '  '.repeat(depth);
     let structure = '';
 
-    // 跳过某些会使输出混乱的元素
+    // Skip certain elements that clutter the output
     const skipTags = new Set(['script', 'style', 'link', 'meta', 'noscript']);
 
-    // 如果不是document，添加当前元素信息
+    // Add current element info if not document
     if (element !== document) {
       const tagName = element.tagName.toLowerCase();
 
-      // 跳过不感兴趣的元素
+      // Skip uninteresting elements
       if (skipTags.has(tagName)) return '';
 
       const id = element.id ? \`#\${element.id}\` : '';
       const classes = element.className && typeof element.className === 'string' ?
         \`.\${element.className.split(' ').filter(c => c).join('.')}\` : '';
 
-      // 获取其他有用的属性
+      // Get other useful attributes
       const attrs = [];
       if (element.getAttribute('role')) attrs.push(\`role="\${element.getAttribute('role')}"\`);
       if (element.getAttribute('aria-label')) attrs.push(\`aria-label="\${element.getAttribute('aria-label')}"\`);
@@ -787,10 +904,10 @@ window.navigator.permissions.query = (parameters) => (
         attrs.push(\`src="\${src.substring(0, 50)}\${src.length > 50 ? '...' : ''}"\`);
       }
 
-      // 添加元素信息
+      // Add element info
       structure += \`\${indent}\${tagName}\${id}\${classes}\${attrs.length ? ' [' + attrs.join(', ') + ']' : ''}\\n\`;
 
-      // 特别处理iframe
+      // Special handling for iframes
       if (tagName === 'iframe') {
         try {
           const iframeDoc = element.contentDocument || element.contentWindow?.document;
@@ -806,10 +923,10 @@ window.navigator.permissions.query = (parameters) => (
       }
     }
 
-    // 获取所有子元素
+    // Get all child elements
     const children = element.children || element.childNodes;
     for (const child of children) {
-      if (child.nodeType === 1) { // 只处理元素节点
+      if (child.nodeType === 1) { // Only process element nodes
         structure += getPageStructure(child, depth + 1, maxDepth);
       }
     }
@@ -825,16 +942,16 @@ window.navigator.permissions.query = (parameters) => (
     return structure as string;
   }
 
-  @timeExecutionSync('--get_state')
+  @timeExecutionSync("--get_state")
   async get_state(): Promise<BrowserState> {
     /**
-     * 获取浏览器的当前状态
+     * Get the current state of the browser
      */
     await this.wait_for_page_and_frames_load();
     const session = await this.get_session();
     session.cached_state = await this._update_state();
 
-    // 如果指定了文件，保存cookies
+    // Save cookies if a file is specified
     if (this.config.cookies_file) {
       void this.save_cookies();
     }
@@ -842,27 +959,29 @@ window.navigator.permissions.query = (parameters) => (
     return session.cached_state;
   }
 
-  private async _update_state(focus_element: number = -1): Promise<BrowserState> {
+  private async _update_state(
+    focus_element: number = -1
+  ): Promise<BrowserState> {
     /**
-     * 更新并返回状态
+     * Update and return the state
      */
     const session = await this.get_session();
 
-    // 检查当前页面是否仍然有效，如果无效则切换到另一个可用页面
+    // Check if the current page is still valid, and switch to another available page if not
     try {
       const page = await this.get_current_page();
-      // 测试页面是否仍然可访问
-      await page.evaluate('1');
+      // Test if the page is still accessible
+      await page.evaluate("1");
     } catch (e) {
-      logger.debug(`当前页面不再可访问: ${e}`);
-      // 获取所有可用页面
+      logger.debug(`Current page is no longer accessible: ${e}`);
+      // Get all available pages
       const pages = await this.session_get_pages(session);
       if (pages.length) {
         this.state.target_id = null;
         const page = await this.session_get_current_page(session);
-        logger.debug(`切换到页面: ${await page.title()}`);
+        logger.debug(`Switched to page: ${await page.title()}`);
       } else {
-        throw new BrowserError('浏览器已关闭: 没有有效的页面可用');
+        throw new BrowserError("Browser is closed: No valid pages available");
       }
     }
 
@@ -872,11 +991,13 @@ window.navigator.permissions.query = (parameters) => (
       const content = await dom_service.get_clickable_elements(
         this.config.highlight_elements,
         focus_element,
-        this.config.viewport_expansion,
+        this.config.viewport_expansion
       );
 
       const screenshot_b64 = await this.take_screenshot();
-      const [pixels_above, pixels_below] = await this.get_scroll_info(await this.get_current_page());
+      const [pixels_above, pixels_below] = await this.get_scroll_info(
+        await this.get_current_page()
+      );
       this.current_state = new BrowserState({
         url: (await this.get_current_page()).url(),
         title: await (await this.get_current_page()).title(),
@@ -891,7 +1012,7 @@ window.navigator.permissions.query = (parameters) => (
       return this.current_state;
     } catch (e) {
       logger.error(`Failed to update state: ${e}`);
-      // 如果可用，返回最后已知的良好状态
+      // Return the last known good state if available
       if (this.current_state) {
         return this.current_state;
       }
@@ -899,11 +1020,11 @@ window.navigator.permissions.query = (parameters) => (
     }
   }
 
-  // region - 浏览器操作
-  @timeExecutionAsync('--take_screenshot')
+  // region - Browser operations
+  @timeExecutionAsync("--take_screenshot")
   async take_screenshot(full_page: boolean = false): Promise<string> {
     /**
-     * 返回当前页面的base64编码截图
+     * Return a base64-encoded screenshot of the current page
      */
     const page = await this.get_current_page();
 
@@ -912,19 +1033,19 @@ window.navigator.permissions.query = (parameters) => (
 
     const screenshot = await page.screenshot({
       fullPage: full_page,
-      animations: 'disabled'
+      animations: "disabled",
     });
 
-    const screenshot_b64 = Buffer.from(screenshot).toString('base64');
+    const screenshot_b64 = Buffer.from(screenshot).toString("base64");
 
     return screenshot_b64;
   }
 
-  @timeExecutionAsync('--remove_highlights')
+  @timeExecutionAsync("--remove_highlights")
   async remove_highlights(): Promise<void> {
     /**
-     * 移除所有由highlightElement函数创建的高亮覆盖和标签
-     * 处理页面可能已关闭或无法访问的情况
+     * Remove all highlight overlays and tags created by the highlightElement function
+     * Handle cases where the page may have been closed or is inaccessible
      */
     try {
       const page = await this.get_current_page();
@@ -945,27 +1066,27 @@ try {
     console.error('Failed to remove highlights:', e);
 }`);
     } catch (e) {
-      logger.debug(`移除高亮失败(这通常是可以的): ${e}`);
-      // 不抛出错误，因为这不是关键功能
+      logger.debug(`Failed to remove highlights (this is usually okay): ${e}`);
+      // Do not throw an error as this is not a critical function
     }
   }
   // endregion
 
-  // region - 用户操作
+  // region - User operations
 
   private static _convert_simple_xpath_to_css_selector(xpath: string): string {
     /**
-     * 将简单的XPath表达式转换为CSS选择器
+     * Convert simple XPath expressions to CSS selectors
      */
     if (!xpath) {
-      return '';
+      return "";
     }
 
-    // 如果存在，移除开头的斜杠
-    xpath = xpath.replace(/^\//, '');
+    // Remove leading slash if present
+    xpath = xpath.replace(/^\//, "");
 
-    // 分割成部分
-    const parts = xpath.split('/');
+    // Split into parts
+    const parts = xpath.split("/");
     const css_parts: string[] = [];
 
     for (const part of parts) {
@@ -973,41 +1094,44 @@ try {
         continue;
       }
 
-      // 处理带冒号的自定义元素，通过转义它们
-      if (part.includes(':') && !part.includes('[')) {
-        const base_part = part.replace(/:/g, '\\:');
+      // Handle custom elements with colons by escaping them
+      if (part.includes(":") && !part.includes("[")) {
+        const base_part = part.replace(/:/g, "\\:");
         css_parts.push(base_part);
         continue;
       }
 
-      // 处理索引表示法 [n]
-      if (part.includes('[')) {
-        const base_part_end = part.indexOf('[');
+      // Handle index notation [n]
+      if (part.includes("[")) {
+        const base_part_end = part.indexOf("[");
         let base_part = part.substring(0, base_part_end);
-        // 处理基本部分中带冒号的自定义元素
-        if (base_part.includes(':')) {
-          base_part = base_part.replace(/:/g, '\\:');
+        // Handle custom elements with colons in the base part
+        if (base_part.includes(":")) {
+          base_part = base_part.replace(/:/g, "\\:");
         }
         const index_part = part.substring(base_part_end);
 
-        // 处理多个索引
-        const indices = index_part.split(']').slice(0, -1).map(i => i.replace('[', '').trim());
+        // Handle multiple indices
+        const indices = index_part
+          .split("]")
+          .slice(0, -1)
+          .map((i) => i.replace("[", "").trim());
 
         for (const idx of indices) {
           try {
-            // 处理数字索引
+            // Handle numeric indices
             if (/^\d+$/.test(idx)) {
               const index = parseInt(idx) - 1;
               base_part += `:nth-of-type(${index + 1})`;
             }
-            // 处理last()函数
-            else if (idx === 'last()') {
-              base_part += ':last-of-type';
+            // Handle last() function
+            else if (idx === "last()") {
+              base_part += ":last-of-type";
             }
-            // 处理position()函数
-            else if (idx.includes('position()')) {
-              if (idx.includes('>1')) {
-                base_part += ':nth-of-type(n+2)';
+            // Handle position() function
+            else if (idx.includes("position()")) {
+              if (idx.includes(">1")) {
+                base_part += ":nth-of-type(n+2)";
               }
             }
           } catch (e) {
@@ -1021,82 +1145,87 @@ try {
       }
     }
 
-    const base_selector = css_parts.join(' > ');
+    const base_selector = css_parts.join(" > ");
     return base_selector;
   }
 
-  @timeExecutionSync('--enhanced_css_selector_for_element')
-  static enhanced_css_selector_for_element(element: DOMElementNode, include_dynamic_attributes: boolean = true): string {
+  @timeExecutionSync("--enhanced_css_selector_for_element")
+  static enhanced_css_selector_for_element(
+    element: DOMElementNode,
+    include_dynamic_attributes: boolean = true
+  ): string {
     /**
-     * 为DOM元素创建CSS选择器，处理各种边缘情况和特殊字符
+     * Create a CSS selector for a DOM element, handling various edge cases and special characters
      *
-     * 参数:
-     *   element: 要为其创建选择器的DOM元素
+     * Parameters:
+     *   element: The DOM element to create a selector for
      *
-     * 返回:
-     *   有效的CSS选择器字符串
+     * Returns:
+     *   A valid CSS selector string
      */
     try {
-      // 从XPath获取基本选择器
-      let css_selector = this._convert_simple_xpath_to_css_selector(element.xpath);
+      // Get the base selector from XPath
+      let css_selector = this._convert_simple_xpath_to_css_selector(
+        element.xpath
+      );
 
-      // 处理class属性
-      if (element.attributes['class'] && include_dynamic_attributes) {
-        // 定义CSS中有效类名的正则表达式模式
+      // Handle class attribute
+      if (element.attributes["class"] && include_dynamic_attributes) {
+        // Define a regex pattern for valid class names in CSS
         const valid_class_name_pattern = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
 
-        // 遍历class属性值
-        const classes = element.attributes['class'].split(/\s+/);
+        // Iterate over class attribute values
+        const classes = element.attributes["class"].split(/\s+/);
         for (const class_name of classes) {
-          // 跳过空类名
+          // Skip empty class names
           if (!class_name.trim()) {
             continue;
           }
 
-          // 检查类名是否有效
+          // Check if the class name is valid
           if (valid_class_name_pattern.test(class_name)) {
-            // 将有效类名附加到CSS选择器
+            // Append valid class name to the CSS selector
             css_selector += `.${class_name}`;
           } else {
-            // 跳过无效类名
+            // Skip invalid class names
             continue;
           }
         }
       }
 
-      // 扩展的安全属性集，这些属性稳定且对选择有用
+      // Extended safe attribute set, these attributes are stable and useful for selection
       const SAFE_ATTRIBUTES = new Set([
-        // 数据属性（如果它们在您的应用程序中是稳定的）
-        'id',
-        // 标准HTML属性
-        'name',
-        'type',
-        'placeholder',
-        // 可访问性属性
-        'aria-label',
-        'aria-labelledby',
-        'aria-describedby',
-        'role',
-        // 常见表单属性
-        'for',
-        'autocomplete',
-        'required',
-        'readonly',
-        // 媒体属性
-        'alt',
-        'title',
-        'src',
-        // 自定义稳定属性（添加任何特定于应用程序的属性）
-        'href',
-        'target',
+        // Data attributes (if they are stable in your application)
+        "id",
+        // Standard HTML attributes
+        "name",
+        "type",
+        "placeholder",
+        // Accessibility attributes
+        "aria-label",
+        "aria-labelledby",
+        "aria-describedby",
+        "role",
+        // Common form attributes
+        "for",
+        "autocomplete",
+        "required",
+        "readonly",
+        // Media attributes
+        "alt",
+        "title",
+        "src",
+        // Custom stable attributes (add any application-specific attributes)
+        "href",
+        "target",
       ]);
 
       if (include_dynamic_attributes) {
         const dynamic_attributes = new Set([
-          'data-id',
-          'data-qa',
-          'data-cy',
-          'data-testid',
+          "data-id",
+          "data-qa",
+          "data-cy",
+          "data-testid",
         ]);
 
         for (const attr of dynamic_attributes) {
@@ -1104,13 +1233,13 @@ try {
         }
       }
 
-      // 处理其他属性
+      // Handle other attributes
       for (const [attribute, value] of Object.entries(element.attributes)) {
-        if (attribute === 'class') {
+        if (attribute === "class") {
           continue;
         }
 
-        // 跳过无效的属性名
+        // Skip invalid attribute names
         if (!attribute.trim()) {
           continue;
         }
@@ -1119,17 +1248,17 @@ try {
           continue;
         }
 
-        // 转义属性名中的特殊字符
-        const safe_attribute = attribute.replace(/:/g, '\\:');
+        // Escape special characters in attribute names
+        const safe_attribute = attribute.replace(/:/g, "\\:");
 
-        // 处理不同的值情况
-        if (value === '') {
+        // Handle different value cases
+        if (value === "") {
           css_selector += `[${safe_attribute}]`;
         } else if (/["'<>`\n\r\t]/.test(value)) {
-          // 对于带有特殊字符的值使用contains
-          // 正则替换*任何*空白为单个空格，然后去除两端空白
-          const collapsed_value = value.replace(/\s+/g, ' ').trim();
-          // 转义嵌入的双引号
+          // Use contains for values with special characters
+          // Regex replace *any* whitespace with a single space, then trim
+          const collapsed_value = value.replace(/\s+/g, " ").trim();
+          // Escape embedded double quotes
           const safe_value = collapsed_value.replace(/"/g, '\\"');
           css_selector += `[${safe_attribute}*="${safe_value}"]`;
         } else {
@@ -1139,17 +1268,19 @@ try {
 
       return css_selector;
     } catch (e) {
-      // 如果出现问题，回退到更基本的选择器
-      const tag_name = element.tag_name || '*';
+      // Fallback to a more basic selector if something goes wrong
+      const tag_name = element.tag_name || "*";
       return `${tag_name}[highlight_index='${element.highlight_index}']`;
     }
   }
 
-  @timeExecutionAsync('--get_locate_element')
-  async get_locate_element(element: DOMElementNode): Promise<ElementHandle | null> {
+  @timeExecutionAsync("--get_locate_element")
+  async get_locate_element(
+    element: DOMElementNode
+  ): Promise<ElementHandle | null> {
     let current_frame: Page | FrameLocator = await this.get_current_page();
 
-    // 从目标元素开始，收集所有父元素
+    // Start with the target element and collect all parent elements
     const parents: DOMElementNode[] = [];
     let current = element;
     while (current.parent != null) {
@@ -1158,11 +1289,11 @@ try {
       current = parent;
     }
 
-    // 反转父元素列表，从上到下处理
+    // Reverse the parent list to process from top to bottom
     parents.reverse();
 
-    // 按顺序处理所有iframe父元素
-    const iframes = parents.filter(item => item.tag_name === 'iframe');
+    // Process all iframe parents in order
+    const iframes = parents.filter((item) => item.tag_name === "iframe");
     for (const parent of iframes) {
       const css_selector = BrowserContext.enhanced_css_selector_for_element(
         parent,
@@ -1178,11 +1309,16 @@ try {
 
     try {
       if ((current_frame as FrameLocator).locator) {
-        const element_handle = await current_frame.locator(css_selector).first().elementHandle();
+        const element_handle = await current_frame
+          .locator(css_selector)
+          .first()
+          .elementHandle();
         return element_handle;
       } else {
-        // 如果隐藏则尝试滚动到视图
-        const element_handle = await (current_frame as Page).locator(css_selector).first();
+        // Attempt to scroll into view if hidden
+        const element_handle = await (current_frame as Page)
+          .locator(css_selector)
+          .first();
         if (element_handle) {
           await element_handle.scrollIntoViewIfNeeded();
           return element_handle.elementHandle();
@@ -1190,57 +1326,70 @@ try {
         return null;
       }
     } catch (e) {
-      logger.error(`Failed to locate element: ${e.stack}`);
+      logger.error(`Failed to locate element: ${(e as Error).stack}`);
       return null;
     }
   }
 
-  @timeExecutionAsync('--input_text_element_node')
-  async input_text_element_node(element_node: DOMElementNode, text: string): Promise<void> {
+  @timeExecutionAsync("--input_text_element_node")
+  async input_text_element_node(
+    element_node: DOMElementNode,
+    text: string
+  ): Promise<void> {
     /**
-     * 将文本输入到元素中，具有适当的错误处理和状态管理。
-     * 处理不同类型的输入字段，并确保输入前元素状态正确。
+     * Input text into an element with proper error handling and state management.
+     * Handles different types of input fields and ensures the element state is correct before input.
      */
     try {
       const element_handle = await this.get_locate_element(element_node);
 
       if (element_handle == null) {
-        throw new BrowserError(`元素: ${element_node} 未找到`);
+        throw new BrowserError(`Element: ${element_node} not found`);
       }
 
-      // 确保元素已准备好输入
+      // Ensure the element is ready for input
       try {
-        await element_handle.waitForElementState('stable', { timeout: 1000 });
+        await element_handle.waitForElementState("stable", { timeout: 1000 });
         await element_handle.scrollIntoViewIfNeeded({ timeout: 1000 });
       } catch (e) {
-        // 忽略等待错误
+        // Ignore wait errors
       }
 
-      // 获取元素属性以确定输入方法
+      // Get element attributes to determine input method
       const tag_handle = await element_handle.getProperty("tagName");
-      const tag_name = (await tag_handle.jsonValue() as string).toLowerCase();
-      const is_contenteditable = await element_handle.getProperty('isContentEditable');
+      const tag_name = ((await tag_handle.jsonValue()) as string).toLowerCase();
+      const is_contenteditable = await element_handle.getProperty(
+        "isContentEditable"
+      );
       const readonly_handle = await element_handle.getProperty("readOnly");
       const disabled_handle = await element_handle.getProperty("disabled");
 
-      const readonly = readonly_handle ? await readonly_handle.jsonValue() : false;
-      const disabled = disabled_handle ? await disabled_handle.jsonValue() : false;
+      const readonly = readonly_handle
+        ? await readonly_handle.jsonValue()
+        : false;
+      const disabled = disabled_handle
+        ? await disabled_handle.jsonValue()
+        : false;
 
-      if ((await is_contenteditable.jsonValue() || tag_name === 'input') && !(readonly || disabled)) {
+      if (
+        ((await is_contenteditable.jsonValue()) || tag_name === "input") &&
+        !(readonly || disabled)
+      ) {
         await element_handle.evaluate('el => el.textContent = ""');
         await element_handle.type(text, { delay: 5 });
       } else {
         await element_handle.fill(text);
       }
     } catch (e) {
-      logger.error(`输入文本失败: ${e}`);
-      throw new BrowserError(`输入文本失败: ${e}`);
+      logger.error(`Failed to input text: ${e}`);
+      throw new BrowserError(`Failed to input text: ${e}`);
     }
   }
 
-
-  @timeExecutionAsync('--click_element_node')
-  async click_element_node(elementNode: DOMElementNode): Promise<string | null> {
+  @timeExecutionAsync("--click_element_node")
+  async click_element_node(
+    elementNode: DOMElementNode
+  ): Promise<string | null> {
     const page = await this.get_current_page();
 
     try {
@@ -1255,25 +1404,37 @@ try {
         throw new Error(`Element: ${elementNode.toString()} not found`);
       }
 
-      const performClick = async (clickFunc: () => Promise<void>): Promise<string | null> => {
+      const performClick = async (
+        clickFunc: () => Promise<void>
+      ): Promise<string | null> => {
         if (this.config.save_downloads_path) {
           try {
             // Try short-timeout expect_download to detect a file download has been triggered
-            const downloadPromise = page.waitForEvent('download', { timeout: 5000 });
+            const downloadPromise = page.waitForEvent("download", {
+              timeout: 5000,
+            });
             await clickFunc();
             const download = await downloadPromise;
 
             // Determine file path
             const suggestedFilename = download.suggestedFilename();
-            const uniqueFilename = await this._getUniqueFilename(this.config.save_downloads_path, suggestedFilename);
-            const downloadPath = path.join(this.config.save_downloads_path, uniqueFilename);
+            const uniqueFilename = await this._getUniqueFilename(
+              this.config.save_downloads_path,
+              suggestedFilename
+            );
+            const downloadPath = path.join(
+              this.config.save_downloads_path,
+              uniqueFilename
+            );
             await download.saveAs(downloadPath);
             logger.debug(`Download triggered. Saved file to: ${downloadPath}`);
             return downloadPath;
           } catch (e) {
-            if ((e as Error).message.includes('timeout')) {
+            if ((e as Error).message.includes("timeout")) {
               // If no download is triggered, treat as normal click
-              logger.debug('No download triggered within timeout. Checking navigation...');
+              logger.debug(
+                "No download triggered within timeout. Checking navigation..."
+              );
               await page.waitForLoadState();
               await this.check_and_handle_navigation(page);
             } else {
@@ -1290,33 +1451,41 @@ try {
       };
 
       try {
-        return await performClick(async () => await elementHandle.click({ timeout: 1500 }));
+        return await performClick(
+          async () => await elementHandle.click({ timeout: 1500 })
+        );
       } catch (e) {
         if (e instanceof URLNotAllowedError) {
           throw e;
         }
         try {
-          return await performClick(async () =>
-            await page.evaluate('(el) => el.click()', elementHandle)
+          return await performClick(
+            async () => await page.evaluate("(el) => el.click()", elementHandle)
           );
         } catch (innerE) {
           if (innerE instanceof URLNotAllowedError) {
             throw innerE;
           }
-          throw new Error(`Failed to click element: ${(innerE as Error).message}`);
+          throw new Error(
+            `Failed to click element: ${(innerE as Error).message}`
+          );
         }
       }
     } catch (e) {
       if (e instanceof URLNotAllowedError) {
         throw e;
       }
-      throw new Error(`Failed to click element: ${elementNode.toString()}. Error: ${(e as Error).message}`);
+      throw new Error(
+        `Failed to click element: ${elementNode.toString()}. Error: ${
+          (e as Error).message
+        }`
+      );
     }
   }
 
   async input_text(element_index: number, text: string): Promise<void> {
     /**
-     * 在指定索引的元素中输入文本
+     * Input text into the element at the specified index
      */
     await this.wait_for_page_and_frames_load();
     const session = await this.get_session();
@@ -1327,22 +1496,24 @@ try {
 
     const selector_map = session.cached_state.selector_map;
     if (!selector_map || !selector_map[element_index]) {
-      throw new BrowserError(`元素索引 ${element_index} 不存在于选择器映射中`);
+      throw new BrowserError(
+        `Element index ${element_index} does not exist in the selector map`
+      );
     }
 
     const element_node = selector_map[element_index];
     await this.input_text_element_node(element_node, text);
 
-    // 等待页面加载
+    // Wait for page load
     await this.wait_for_page_and_frames_load();
 
-    // 更新状态
+    // Update state
     session.cached_state = await this._update_state(element_index);
   }
 
   async click_element(element_index: number): Promise<void> {
     /**
-     * 点击指定索引的元素
+     * Click the element at the specified index
      */
     await this.wait_for_page_and_frames_load();
     const session = await this.get_session();
@@ -1353,22 +1524,24 @@ try {
 
     const selector_map = session.cached_state.selector_map;
     if (!selector_map || !selector_map[element_index]) {
-      throw new BrowserError(`元素索引 ${element_index} 不存在于选择器映射中`);
+      throw new BrowserError(
+        `Element index ${element_index} does not exist in the selector map`
+      );
     }
 
     const element_node = selector_map[element_index];
     await this.click_element_node(element_node);
 
-    // 等待页面加载
+    // Wait for page load
     await this.wait_for_page_and_frames_load();
 
-    // 更新状态
+    // Update state
     session.cached_state = await this._update_state();
   }
 
   async click_element_by_selector(selector: string): Promise<void> {
     /**
-     * 通过CSS选择器点击元素
+     * Click an element by CSS selector
      */
     await this.wait_for_page_and_frames_load();
     const page = await this.get_current_page();
@@ -1376,20 +1549,22 @@ try {
     try {
       await page.click(selector);
     } catch (e) {
-      throw new BrowserError(`通过选择器 ${selector} 点击元素失败: ${e}`);
+      throw new BrowserError(
+        `Failed to click element by selector ${selector}: ${e}`
+      );
     }
 
-    // 等待页面加载
+    // Wait for page load
     await this.wait_for_page_and_frames_load();
 
-    // 更新状态
+    // Update state
     const session = await this.get_session();
     session.cached_state = await this._update_state();
   }
 
   async input_text_by_selector(selector: string, text: string): Promise<void> {
     /**
-     * 通过CSS选择器在元素中输入文本
+     * Input text into an element by CSS selector
      */
     await this.wait_for_page_and_frames_load();
     const page = await this.get_current_page();
@@ -1397,20 +1572,22 @@ try {
     try {
       await page.fill(selector, text);
     } catch (e) {
-      throw new BrowserError(`通过选择器 ${selector} 输入文本失败: ${e}`);
+      throw new BrowserError(
+        `Failed to input text by selector ${selector}: ${e}`
+      );
     }
 
-    // 等待页面加载
+    // Wait for page load
     await this.wait_for_page_and_frames_load();
 
-    // 更新状态
+    // Update state
     const session = await this.get_session();
     session.cached_state = await this._update_state();
   }
 
   async press_key(key: string): Promise<void> {
     /**
-     * 按下键盘按键
+     * Press a keyboard key
      */
     await this.wait_for_page_and_frames_load();
     const page = await this.get_current_page();
@@ -1418,20 +1595,20 @@ try {
     try {
       await page.keyboard.press(key);
     } catch (e) {
-      throw new BrowserError(`按下键 ${key} 失败: ${e}`);
+      throw new BrowserError(`Failed to press key ${key}: ${e}`);
     }
 
-    // 等待页面加载
+    // Wait for page load
     await this.wait_for_page_and_frames_load();
 
-    // 更新状态
+    // Update state
     const session = await this.get_session();
     session.cached_state = await this._update_state();
   }
 
   async save_cookies(): Promise<void> {
     /**
-     * 保存当前会话的cookies到文件
+     * Save cookies of the current session to a file
      */
     if (!this.config.cookies_file || !this.session) {
       return;
@@ -1441,42 +1618,47 @@ try {
       const cookies = await this.session.context.cookies();
       const cookiesJson = JSON.stringify(cookies, null, 2);
       fs.writeFileSync(this.config.cookies_file, cookiesJson);
-      logger.debug(`保存了 ${cookies.length} 个cookies到 ${this.config.cookies_file}`);
+      logger.debug(
+        `Saved ${cookies.length} cookies to ${this.config.cookies_file}`
+      );
     } catch (e) {
-      logger.error(`保存cookies失败: ${e}`);
+      logger.error(`Failed to save cookies: ${e}`);
     }
   }
 
-  async session_get_pages(session: BrowserSession): Promise<Page[]>  {
-    if (this.config.mode === 'electron-view') {
-      return await this.browser.config.electronWebviewContext.pages(session);
+  async session_get_pages(session: BrowserSession): Promise<Page[]> {
+    if (this.config.mode === "electron-view") {
+      // Assuming electronWebviewContext is guaranteed to be defined if mode is 'electron-view'
+      // based on initialization logic.
+      return await this.browser.config.electronWebviewContext!.pages(session);
     }
     return session.context.pages();
   }
 
   async session_new_page(session: BrowserSession): Promise<Page> {
-    if (this.config.mode === 'electron-view') {
-      return await this.browser.config.electronWebviewContext.newPage(session);
+    if (this.config.mode === "electron-view") {
+      // Assuming electronWebviewContext is guaranteed to be defined if mode is 'electron-view'
+      return await this.browser.config.electronWebviewContext!.newPage(session);
     }
     return session.context.newPage();
   }
 
   async session_get_current_page(session: BrowserSession): Promise<Page> {
     /**
-     * 获取当前活动页面
+     * Get the current active page
      */
     const pages = await this.session_get_pages(session);
     if (!pages.length) {
       return await this.session_new_page(session);
     }
 
-    // 如果有目标ID，尝试找到匹配的页面
+    // If there is a target ID, try to find the matching page
     if (this.state.target_id && this.browser.config.cdp_url) {
       const targets = await this._get_cdp_targets();
       for (const target of targets) {
-        if (target['targetId'] === this.state.target_id) {
+        if (target.id === this.state.target_id) {
           for (const page of pages) {
-            if (page.url() === target['url']) {
+            if (page.url() === target.url) {
               return page;
             }
           }
@@ -1484,13 +1666,14 @@ try {
       }
     }
 
-    // 如果没有找到匹配的页面，使用第一个页面
-    return pages[pages.length - 1];
+    // Use the first page if no matching page is found
+    // Non-null assertion is safe due to the `!pages.length` check earlier.
+    return pages[pages.length - 1]!;
   }
 
   private async _get_cdp_targets(): Promise<CDPTarget[]> {
     /**
-     * 获取CDP目标列表
+     * Get the list of CDP targets
      */
     if (!this.browser.config.cdp_url) {
       return [];
@@ -1498,33 +1681,30 @@ try {
 
     try {
       const response = await fetch(`${this.browser.config.cdp_url}/json/list`);
-      const targets = await response.json() as CDPTarget[];
-      return targets.filter((target: any) => {
-        if (!target['url'].startsWith('devtools://')) {
-          return false;
-        }
-        return target['type'] === 'page';
+      const targets = (await response.json()) as CDPTarget[];
+      return targets.filter((target: CDPTarget) => {
+        return !target.url.startsWith("devtools://") && target.type === "page";
       });
     } catch (e) {
-      logger.error(`获取CDP目标失败: ${e}`);
+      logger.error(`Failed to get CDP targets: ${e}`);
       return [];
     }
   }
 
   async get_tabs_info(): Promise<TabInfo[]> {
     /**
-     * 获取所有标签页的信息
+     * Get information about all tabs
      */
     const session = await this.get_session();
     const pages = await this.session_get_pages(session);
     const tabs: TabInfo[] = [];
 
     for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
+      const page = pages[i]!; // Non-null assertion as we are iterating within bounds
       tabs.push({
         page_id: i,
         url: page.url(),
-        title: await page.title()
+        title: await page.title(),
       });
     }
 
@@ -1533,25 +1713,29 @@ try {
 
   async switch_to_tab(tab_index: number): Promise<void> {
     /**
-     * 切换到指定索引的标签页
+     * Switch to the tab at the specified index
      */
     const session = await this.get_session();
     const pages = await this.session_get_pages(session);
 
     if (tab_index < 0 || tab_index >= pages.length) {
-      throw new BrowserError(`无效的标签页索引: ${tab_index}, 可用标签页: ${pages.length}`);
+      throw new BrowserError(
+        `Invalid tab index: ${tab_index}, available tabs: ${pages.length}`
+      );
     }
 
-    const page = pages[tab_index];
-    page.bringToFront && await page.bringToFront();
+    const page = pages[tab_index]!; // Non-null assertion as index is checked
+    if (page) { // Added null check for safety, though `!` should suffice
+      page.bringToFront && (await page.bringToFront());
 
-    // 更新目标ID
-    if (this.browser.config.cdp_url) {
-      const targets = await this._get_cdp_targets();
-      for (const target of targets) {
-        if (target['url'] === page.url()) {
-          this.state.target_id = target['targetId'];
-          break;
+      // Update target ID
+      if (this.browser.config.cdp_url) {
+        const targets = await this._get_cdp_targets();
+        for (const target of targets) {
+          if (target.url === page.url()) {
+            this.state.target_id = target.id;
+            break;
+          }
         }
       }
     }
@@ -1573,7 +1757,10 @@ try {
     this.state.target_id = null;
   }
 
-  async _getUniqueFilename(directory: string, filename: string): Promise<string> {
+  async _getUniqueFilename(
+    directory: string,
+    filename: string
+  ): Promise<string> {
     // Generate a unique filename by appending (1), (2), etc., if a file already exists
     const { base, ext } = path.parse(filename);
     let counter = 1;
@@ -1589,11 +1776,12 @@ try {
 
   async get_scroll_info(page: Page): Promise<[number, number]> {
     /**
-     * 获取页面滚动信息
-     * 返回: [pixels_above, pixels_below]
+     * Get page scroll information
+     * Returns: [pixels_above, pixels_below]
      */
     const scrollInfo = await page.evaluate(() => {
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollTop =
+        window.pageYOffset || document.documentElement.scrollTop;
       const scrollHeight = Math.max(
         document.body.scrollHeight,
         document.documentElement.scrollHeight,
@@ -1604,29 +1792,34 @@ try {
 
       return {
         pixels_above: Math.round(scrollTop),
-        pixels_below: Math.round(Math.max(0, scrollHeight - clientHeight - scrollTop))
+        pixels_below: Math.round(
+          Math.max(0, scrollHeight - clientHeight - scrollTop)
+        ),
       };
     });
 
     return [scrollInfo.pixels_above, scrollInfo.pixels_below];
   }
 
-  async scroll_page(direction: 'up' | 'down', amount: number = 300): Promise<void> {
+  async scroll_page(
+    direction: "up" | "down",
+    amount: number = 300
+  ): Promise<void> {
     /**
-     * 滚动页面
+     * Scroll the page
      *
-     * 参数:
-     *   direction: 滚动方向 ('up' 或 'down')
-     *   amount: 滚动像素数
+     * Parameters:
+     *   direction: Scroll direction ('up' or 'down')
+     *   amount: Number of pixels to scroll
      */
     const page = await this.get_current_page();
-    const scrollAmount = direction === 'up' ? -amount : amount;
+    const scrollAmount = direction === "up" ? -amount : amount;
 
     await page.evaluate((scrollY) => {
       window.scrollBy(0, scrollY);
     }, scrollAmount);
 
-    // 等待滚动完成
+    // Wait for scroll to complete
     await page.waitForTimeout(100);
   }
   async get_selector_map(): Promise<SelectorMap> {
@@ -1639,13 +1832,23 @@ try {
 
   async getElementByIndex(index: number): Promise<ElementHandle | null> {
     const selectorMap = await this.get_selector_map();
-    const elementHandle = await this.get_locate_element(selectorMap[index]);
+    const elementNode = selectorMap[index];
+    if (!elementNode) {
+      logger.warn(`Element with index ${index} not found in selectorMap.`);
+      return null;
+    }
+    const elementHandle = await this.get_locate_element(elementNode);
     return elementHandle;
   }
 
-  async getDomElementByIndex(index: number): Promise<DOMElementNode> {
+  async getDomElementByIndex(index: number): Promise<DOMElementNode | undefined> {
     const selectorMap = await this.get_selector_map();
-    return selectorMap[index];
+    const elementNode = selectorMap[index];
+    if (!elementNode) {
+      logger.warn(`Element with index ${index} not found in selectorMap.`);
+      return undefined;
+    }
+    return elementNode;
   }
 
   async is_file_uploader(
@@ -1665,8 +1868,9 @@ try {
     }
 
     // Check for file input attributes
-    if (elementNode.tag_name === 'input') {
-      isUploader = elementNode.attributes.type === 'file' ||
+    if (elementNode.tag_name === "input") {
+      isUploader =
+        elementNode.attributes.type === "file" ||
         !!elementNode.attributes.accept;
     }
 
@@ -1688,33 +1892,42 @@ try {
     return false;
   }
 
-  @timeExecutionAsync('--create_new_tab')
+  @timeExecutionAsync("--create_new_tab")
   async create_new_tab(url?: string): Promise<void> {
     // Create a new tab and optionally navigate to a URL
     if (url && !this._is_url_allowed(url)) {
-      throw new BrowserError(`Cannot create new tab with non-allowed URL: ${url}`);
+      throw new BrowserError(
+        `Cannot create new tab with non-allowed URL: ${url}`
+      );
     }
 
     const session = await this.get_session();
     const newPage = await this.session_new_page(session);
-    await newPage.waitForLoadState();
+    if (newPage) { // Added null check
+      await newPage.waitForLoadState();
 
-    if (url) {
-      await newPage.goto(url);
-      await this.wait_for_page_and_frames_load(1);
-    }
+      if (url) {
+        await newPage.goto(url);
+        await this.wait_for_page_and_frames_load(1);
+      }
 
-    // Get target ID for new page if using CDP
-    if (this.browser.config.cdp_url) {
-      const targets = await this._get_cdp_targets();
-      for (const target of targets) {
-        if (target['url'] === newPage.url()) {
-          this.state.target_id = target['targetId'];
-          break;
+      // Get target ID for new page if using CDP
+      if (this.browser.config.cdp_url) {
+        const targets = await this._get_cdp_targets();
+        for (const target of targets) {
+          if (target.url === newPage.url()) {
+            this.state.target_id = target.id;
+            break;
+          }
         }
       }
     }
   }
 }
 
-export { BrowserContext, BrowserContextConfig, BrowserContextState, BrowserSession };
+export {
+  BrowserContext,
+  BrowserContextConfig,
+  BrowserContextState,
+  BrowserSession,
+};

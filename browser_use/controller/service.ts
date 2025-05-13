@@ -151,6 +151,9 @@ export class Controller<Context> {
         }
 
         const elementNode = await ctx.browser.getDomElementByIndex(params.index);
+        if (!elementNode) { // Added check for undefined elementNode
+          throw new Error(`Element with index ${params.index} not found in DOM tree.`);
+        }
         const initialPages = (await ctx.browser.session_get_pages(session)).length;
 
         // if element has file uploader then dont click
@@ -212,6 +215,9 @@ export class Controller<Context> {
         }
 
         const elementNode = await ctx.browser.getDomElementByIndex(params.index);
+        if (!elementNode) { // Added check for undefined elementNode
+          throw new Error(`Element with index ${params.index} not found in DOM tree.`);
+        }
         await ctx.browser.input_text_element_node(elementNode, params.text);
 
         let msg = '';
@@ -456,6 +462,12 @@ export class Controller<Context> {
         const selectorMap = await ctx.browser.get_selector_map();
         const domElement = selectorMap[params.index];
 
+        if (!domElement) { // Added check for undefined domElement
+          const msg = `Element with index ${params.index} not found in selector map.`;
+          logger.error(msg);
+          return { error: msg, include_in_memory: true };
+        }
+
         try {
           // Frame-aware approach since we know it works
           const allOptions: string[] = [];
@@ -545,6 +557,12 @@ export class Controller<Context> {
         const page = await ctx.browser.get_current_page();
         const selectorMap = await ctx.browser.get_selector_map();
         const domElement = selectorMap[index];
+
+        if (!domElement) { // Added check for undefined domElement
+          const msg = `Element with index ${index} not found in selector map.`;
+          logger.error(msg);
+          return { error: msg, include_in_memory: true };
+        }
 
         // Validate that we're working with a select element
         if (domElement.tag_name !== "select") {
@@ -701,10 +719,10 @@ export class Controller<Context> {
             params,
             {
               browser: browserContext,
-              page_extraction_llm: pageExtractionLlm!,
-              sensitive_data: sensitiveData!,
-              available_file_paths: availableFilePaths!,
-              context,
+              page_extraction_llm: pageExtractionLlm ?? undefined, // Handle null case
+              sensitive_data: sensitiveData ?? undefined, // Handle null case
+              available_file_paths: availableFilePaths ?? undefined, // Handle null case
+              context: context ?? undefined, // Handle null case
             }
           );
 

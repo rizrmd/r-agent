@@ -3,16 +3,17 @@ export type LogLevel = 'debug' | 'info';
 export class Logger {
   private static globalLevel: LogLevel = 'info';
   private name: string;
-  private level: string;
+  private level: LogLevel; // Changed to LogLevel type
 
   constructor(name: string) {
     this.name = name;
+    this.level = Logger.globalLevel; // Initialize level
   }
   setLogLevel(level: LogLevel) {
     this.level = level || Logger.globalLevel;
   }
-  isDebugEnabled() {
-    return !!process.env.DEBUG || this.level === 'debug' || this.level === 'trace';
+  isDebugEnabled(): boolean {
+    return this.level === 'debug';
   }
   log(...args: any[]) {
     console.log(`[${this.name}]`, ...args);
@@ -54,8 +55,8 @@ const logger = new Logger('utils');
  */
 export function timeExecutionAsync(additionalText: string = '') {
   return function (
-    _target: any,
-    _propertyKey: string,
+    target: any,
+    propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
     const originalMethod = descriptor.value;

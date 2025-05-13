@@ -160,10 +160,15 @@ export class AgentHistory {
     const elements: (DOMHistoryElement | null)[] = [];
 
     for (const action of model_output.action) {
-      const index = Object.values(action)[0]?.index;
+      const actionValue = Object.values(action)[0] as any; // Added type assertion
+      const index = actionValue?.index;
       if (index != null && index in selector_map) {
-        const el: DOMElementNode = selector_map[index];
-        elements.push(HistoryTreeProcessor.convert_dom_element_to_history_element(el));
+        const el = selector_map[index];
+        if (el) { // Added check for undefined el
+          elements.push(HistoryTreeProcessor.convert_dom_element_to_history_element(el));
+        } else {
+          elements.push(null);
+        }
       } else {
         elements.push(null);
       }
@@ -273,11 +278,12 @@ export class AgentHistoryList {
   }
 
   last_action(): Record<string, any> | null {
-    if (this.history.length > 0 && this.history[this.history.length - 1].model_output) {
-      const lastAction = this.history[this.history.length - 1].model_output!.action[
-        this.history[this.history.length - 1].model_output!.action.length - 1
-      ];
-      return JSON.parse(JSON.stringify(lastAction));
+    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
+    if (lastHistoryItem && lastHistoryItem.model_output && lastHistoryItem.model_output.action.length > 0) {
+      const lastAction = lastHistoryItem.model_output.action[lastHistoryItem.model_output.action.length - 1];
+      if (lastAction) { // Added check for undefined lastAction
+        return JSON.parse(JSON.stringify(lastAction));
+      }
     }
     return null;
   }
@@ -286,41 +292,52 @@ export class AgentHistoryList {
     const errors: (string | null)[] = [];
 
     for (const h of this.history) {
-      const step_errors = h.result
-        .filter(r => r.error)
-        .map(r => r.error!);
+      if (h && h.result) { // Added check for undefined h and h.result
+        const step_errors = h.result
+          .filter(r => r && r.error) // Added check for undefined r
+          .map(r => r.error) // Removed non-null assertion
+          .filter(e => e !== undefined); // Filter out undefined errors
 
-      // Each step can have only one error
-      errors.push(step_errors.length > 0 ? step_errors[0] : null);
+        // Each step can have only one error
+        errors.push(step_errors.length > 0 && step_errors[0] !== undefined ? step_errors[0] : null); // Added check for undefined step_errors[0]
+      } else {
+        errors.push(null);
+      }
     }
 
     return errors;
   }
 
   final_result(): string | null {
+    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
     if (
-      this.history.length > 0 &&
-      this.history[this.history.length - 1].result.length > 0 &&
-      this.history[this.history.length - 1].result[this.history[this.history.length - 1].result.length - 1].extracted_content
+      lastHistoryItem &&
+      lastHistoryItem.result && // Added check for undefined result
+      lastHistoryItem.result.length > 0
     ) {
-      return this.history[this.history.length - 1].result[this.history[this.history.length - 1].result.length - 1].extracted_content!;
+      const lastResultItem = lastHistoryItem.result[lastHistoryItem.result.length - 1];
+      if (lastResultItem && lastResultItem.extracted_content) { // Added check for undefined lastResultItem and extracted_content
+        return lastResultItem.extracted_content;
+      }
     }
     return null;
   }
 
   is_done(): boolean {
-    if (this.history.length > 0 && this.history[this.history.length - 1].result.length > 0) {
-      const last_result = this.history[this.history.length - 1].result[this.history[this.history.length - 1].result.length - 1];
-      return last_result.is_done === true;
+    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
+    if (lastHistoryItem && lastHistoryItem.result && lastHistoryItem.result.length > 0) { // Added check for undefined result
+      const lastResultItem = lastHistoryItem.result[lastHistoryItem.result.length - 1];
+      return !!(lastResultItem && lastResultItem.is_done); // Added check for undefined lastResultItem
     }
     return false;
   }
 
   is_successful(): boolean | null {
-    if (this.history.length > 0 && this.history[this.history.length - 1].result.length > 0) {
-      const last_result = this.history[this.history.length - 1].result[this.history[this.history.length - 1].result.length - 1];
-      if (last_result.is_done === true) {
-        return last_result.success || false;
+    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
+    if (lastHistoryItem && lastHistoryItem.result && lastHistoryItem.result.length > 0) { // Added check for undefined result
+      const lastResultItem = lastHistoryItem.result[lastHistoryItem.result.length - 1];
+      if (lastResultItem && lastResultItem.is_done) { // Added check for undefined lastResultItem
+        return lastResultItem.success || false;
       }
     }
     return null;
@@ -342,9 +359,11 @@ export class AgentHistoryList {
     const action_names: string[] = [];
 
     for (const action of this.model_actions()) {
-      const actions = Object.keys(action);
-      if (actions.length > 0) {
-        action_names.push(actions[0]);
+      if (action) { // Added check for undefined action
+        const actions = Object.keys(action);
+        if (actions.length > 0 && actions[0]) { // Added check for undefined actions[0]
+          action_names.push(actions[0]);
+        }
       }
     }
 

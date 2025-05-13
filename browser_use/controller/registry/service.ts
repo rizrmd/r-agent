@@ -6,7 +6,7 @@ import {
   ActionRegistry,
   RegisteredAction,
 } from './views';
-import { ActionResult } from "../../agent/views";
+import { type ActionResult } from "../../agent/views";
 import { timeExecutionAsync } from '../../utils';
 
 export interface ActionRunContext<Context = any> {
@@ -113,7 +113,7 @@ export class Registry<Context> {
     if (includeAction?.length) {
       actions = actions.filter((action) => includeAction.includes(action.name));
     }
-    const actionSchema = {};
+    const actionSchema: Record<string, z.ZodTypeAny> = {}; // Added type annotation
     for (const action of actions) {
       actionSchema[action.name] = z.union([z.null(), action.paramsSchema], {
         description: action.description,

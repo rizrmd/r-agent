@@ -1,24 +1,47 @@
-import * as fs from 'fs';
-import { Browser } from '../browser/browser';
-import { BrowserContext, BrowserContextConfig } from '../browser/context';
-import { BrowserState, BrowserStateHistory } from '../browser/views';
-import { Controller } from '../controller/service';
-import { MessageManager } from './message_manager/service';
-import { AgentState, AgentSettings, ActionResult, AgentOutput, AgentOutputSchema, AgentStepInfo, AgentHistoryList } from '../agent/views';
-import { AgentHistory } from '../agent/views';
-import { DOMHistoryElement } from '../dom/history_tree_processor/view';
-import { HistoryTreeProcessor } from '../dom/history_tree_processor/service';
-import { BaseChatModel, BaseMessage, HumanMessage, SystemMessage } from '../models/langchain';
-import { PlannerPrompt, AgentMessagePrompt, SystemPrompt } from './prompts';
-import { ProductTelemetry } from '../telemetry/service';
-import z from 'zod';
-import { ActionModel, getActionIndex, setActionIndex } from '../controller/registry/views';
-import { Logger } from '../utils';
-import { convertInputMessages } from './message_manager/utils';
+import * as fs from "fs";
+import { Browser } from "../browser/browser";
+import { BrowserContext, BrowserContextConfig } from "../browser/context";
+import { BrowserState, BrowserStateHistory } from "../browser/views";
+import { Controller } from "../controller/service";
+import { MessageManager } from "./message_manager/service";
+import {
+  AgentState,
+  AgentSettings,
+  ActionResult,
+  AgentOutput,
+  AgentOutputSchema,
+  AgentStepInfo,
+  AgentHistoryList,
+} from "../agent/views";
+import { AgentHistory } from "../agent/views";
+import { DOMHistoryElement } from "../dom/history_tree_processor/view";
+import { HistoryTreeProcessor } from "../dom/history_tree_processor/service";
+import {
+  BaseChatModel,
+  BaseMessage,
+  HumanMessage,
+  SystemMessage,
+} from "../models/langchain";
+import { PlannerPrompt, AgentMessagePrompt, SystemPrompt } from "./prompts";
+import { ProductTelemetry } from "../telemetry/service";
+import z from "zod";
+import {
+  ActionModel, // No longer a type import
+  getActionIndex,
+  setActionIndex,
+} from "../controller/registry/views";
+import { Logger } from "../utils";
+import { convertInputMessages } from "./message_manager/utils";
 
-const logger = new Logger('agent/service');
+const logger = new Logger("agent/service");
 
-type ToolCallingMethod = 'auto' | 'function_calling' | 'json_mode' | 'raw' | null | undefined;
+type ToolCallingMethod =
+  | "auto"
+  | "function_calling"
+  | "json_mode"
+  | "raw"
+  | null
+  | undefined;
 
 class Agent<Context extends unknown = any> {
   private task: string;
@@ -27,8 +50,8 @@ class Agent<Context extends unknown = any> {
   private sensitiveData?: Record<string, string>;
   private settings: AgentSettings;
   private state: AgentState;
-  private AgentOutput: z.ZodType<any>;
-  private DoneAgentOutput: z.ZodType<any>;
+  private AgentOutput!: z.ZodType<any>; // Added !
+  private DoneAgentOutput!: z.ZodType<any>; // Added !
   private availableActions: string;
   private toolCallingMethod: ToolCallingMethod;
   private messageManager: MessageManager;
@@ -36,9 +59,17 @@ class Agent<Context extends unknown = any> {
   private injectedBrowserContext: boolean;
   private browser?: Browser;
   private browserContext?: BrowserContext;
-  private registerNewStepCallback?: (state: BrowserState, modelOutput: AgentOutput, step: number) => void | Promise<void>;
-  private registerActionResultCallback?: (results: ActionResult[]) => void | Promise<void>;
-  private registerDoneCallback?: (history: AgentHistoryList) => void | Promise<void>;
+  private registerNewStepCallback?: (
+    state: BrowserState,
+    modelOutput: AgentOutput,
+    step: number
+  ) => void | Promise<void>;
+  private registerActionResultCallback?: (
+    results: ActionResult[]
+  ) => void | Promise<void>;
+  private registerDoneCallback?: (
+    history: AgentHistoryList
+  ) => void | Promise<void>;
   private registerExternalAgentStatusRaiseErrorCallback?: () => void | Promise<boolean>;
   private context?: Context;
   private telemetry: ProductTelemetry;
@@ -57,10 +88,18 @@ class Agent<Context extends unknown = any> {
       browserContext?: BrowserContext;
       controller?: Controller<Context>;
       sensitiveData?: Record<string, string>;
-      initialActions?: ActionModel[];
-      registerNewStepCallback?: (state: BrowserState, modelOutput: AgentOutput, step: number) => void | Promise<void>;
-      registerActionResultCallback?: (results: ActionResult[]) => void | Promise<void>;
-      registerDoneCallback?: (history: AgentHistoryList) => void | Promise<void>;
+      initialActions?: z.infer<typeof ActionModel>[]; // Use z.infer
+      registerNewStepCallback?: (
+        state: BrowserState,
+        modelOutput: AgentOutput,
+        step: number
+      ) => void | Promise<void>;
+      registerActionResultCallback?: (
+        results: ActionResult[]
+      ) => void | Promise<void>;
+      registerDoneCallback?: (
+        history: AgentHistoryList
+      ) => void | Promise<void>;
       registerExternalAgentStatusRaiseErrorCallback?: () => void | Promise<boolean>;
       useVision?: boolean;
       useVisionForPlanner?: boolean;
@@ -95,7 +134,8 @@ class Agent<Context extends unknown = any> {
       use_vision: options.useVision ?? true,
       use_vision_for_planner: options.useVisionForPlanner ?? false,
       save_conversation_path: options.saveConversationPath,
-      save_conversation_path_encoding: options.saveConversationPathEncoding ?? 'utf-8',
+      save_conversation_path_encoding:
+        options.saveConversationPathEncoding ?? "utf-8",
       max_failures: options.maxFailures ?? 3,
       retry_delay: options.retryDelay ?? 10,
       override_system_message: options.overrideSystemMessage,
@@ -106,26 +146,35 @@ class Agent<Context extends unknown = any> {
       generate_gif: options.generateGif ?? false,
       available_file_paths: options.availableFilePaths,
       include_attributes: options.includeAttributes ?? [
-        'title', 'type', 'name', 'role', 'aria-label',
-        'placeholder', 'value', 'alt', 'aria-expanded', 'data-date-format'
+        "title",
+        "type",
+        "name",
+        "role",
+        "aria-label",
+        "placeholder",
+        "value",
+        "alt",
+        "aria-expanded",
+        "data-date-format",
       ],
       max_actions_per_step: options.maxActionsPerStep ?? 10,
-      tool_calling_method: options.toolCallingMethod ?? 'auto',
+      tool_calling_method: options.toolCallingMethod ?? "auto",
       page_extraction_llm: options.pageExtractionLLM || this.llm,
       planner_llm: options.plannerLLM,
       planner_interval: options.plannerInterval ?? 1,
     });
 
-
     // Initialize state
-    this.state = options.injectedAgentState || new AgentState({
-      n_steps: 0,
-      last_result: [],
-      consecutive_failures: 0,
-      stopped: false,
-      paused: false,
-      agent_id: this.generateUUID(),
-    });
+    this.state =
+      options.injectedAgentState ||
+      new AgentState({
+        n_steps: 0,
+        last_result: [],
+        consecutive_failures: 0,
+        stopped: false,
+        paused: false,
+        agent_id: this.generateUUID(),
+      });
 
     // Setup action models
     this.setupActionModels();
@@ -172,14 +221,18 @@ class Agent<Context extends unknown = any> {
 
     if (this.browser && !this.browserContext) {
       // In a real implementation, you would create a browser context
-      this.browserContext = new BrowserContext(this.browser, new BrowserContextConfig());
+      this.browserContext = new BrowserContext(
+        this.browser,
+        new BrowserContextConfig()
+      );
     }
 
     // Callbacks
     this.registerNewStepCallback = options.registerNewStepCallback;
     this.registerActionResultCallback = options.registerActionResultCallback;
     this.registerDoneCallback = options.registerDoneCallback;
-    this.registerExternalAgentStatusRaiseErrorCallback = options.registerExternalAgentStatusRaiseErrorCallback;
+    this.registerExternalAgentStatusRaiseErrorCallback =
+      options.registerExternalAgentStatusRaiseErrorCallback;
 
     // Context
     this.context = options.context;
@@ -188,20 +241,26 @@ class Agent<Context extends unknown = any> {
     this.telemetry = new ProductTelemetry();
 
     if (this.settings.save_conversation_path) {
-      logger.log(`Saving conversation to ${this.settings.save_conversation_path}`);
+      logger.log(
+        `Saving conversation to ${this.settings.save_conversation_path}`
+      );
     }
   }
 
   // Helper methods
   private generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      function (c) {
+        const r = (Math.random() * 16) | 0,
+          v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      }
+    );
   }
 
   private setMessageContext(): string | undefined {
-    if (this.toolCallingMethod === 'raw') {
+    if (this.toolCallingMethod === "raw") {
       if (this.settings.message_context) {
         return `${this.settings.message_context}\n\nAvailable actions: ${this.availableActions}`;
       } else {
@@ -214,28 +273,28 @@ class Agent<Context extends unknown = any> {
   private setBrowserUseVersionAndSource(): void {
     try {
       // Implementation would depend on how you want to track versions in TypeScript
-      this.version = '1.0.0'; // Placeholder
-      this.source = 'npm';    // Placeholder
+      this.version = "1.0.0"; // Placeholder
+      this.source = "npm"; // Placeholder
     } catch (error) {
-      this.version = 'unknown';
-      this.source = 'unknown';
+      this.version = "unknown";
+      this.source = "unknown";
     }
     logger.log(`Version: ${this.version}, Source: ${this.source}`);
   }
 
   private setModelNames(): void {
     this.chatModelLibrary = this.llm.constructor.name;
-    this.modelName = 'Unknown';
+    this.modelName = "Unknown";
 
-    if ('model_name' in this.llm) {
-      this.modelName = this.llm.model_name || 'Unknown';
+    if ("model_name" in this.llm) {
+      this.modelName = this.llm.model_name || "Unknown";
     }
 
     if (this.settings.planner_llm) {
-      if ('model_name' in this.settings.planner_llm) {
+      if ("model_name" in this.settings.planner_llm) {
         this.plannerModelName = this.settings.planner_llm.model_name;
       } else {
-        this.plannerModelName = 'Unknown';
+        this.plannerModelName = "Unknown";
       }
     }
   }
@@ -245,27 +304,36 @@ class Agent<Context extends unknown = any> {
     this.AgentOutput = z.object({
       current_state: AgentOutputSchema.shape.current_state,
       action: z.array(AgentModel, {
-        description: 'List of actions to execute',
+        description: "List of actions to execute",
       }),
     });
-    const DoneActionModel = this.controller.registry.create_action_model(['done']);
+    const DoneActionModel = this.controller.registry.create_action_model([
+      "done",
+    ]);
     this.DoneAgentOutput = z.object({
       current_state: AgentOutputSchema.shape.current_state,
       action: z.array(DoneActionModel, {
-        description: 'List of actions to execute',
+        description: "List of actions to execute",
       }),
     });
   }
 
   private setToolCallingMethod(): ToolCallingMethod {
     const toolCallingMethod = this.settings.tool_calling_method;
-    if (toolCallingMethod === 'auto') {
-      if (this.modelName.includes('deepseek-reasoner') || this.modelName.includes('deepseek-r1') || this.modelName.includes('deepseek-v3')) {
-        return 'raw';
-      } else if (this.chatModelLibrary === 'ChatGoogleGenerativeAI') {
-        return null;
-      } else if (this.chatModelLibrary === 'ChatOpenAI' || this.chatModelLibrary === 'AzureChatOpenAI') {
-        return 'function_calling';
+    if (toolCallingMethod === "auto") {
+      if (
+        this.modelName.includes("deepseek-reasoner") ||
+        this.modelName.includes("deepseek-r1") ||
+        this.modelName.includes("deepseek-v3")
+      ) {
+        return "raw";
+      } else if (this.chatModelLibrary === "ChatGoogleGenerativeAI" || this.chatModelLibrary === "ChatGeminiAI") {
+        return "function_calling"; // Use function_calling for Gemini as well
+      } else if (
+        this.chatModelLibrary === "ChatOpenAI" ||
+        this.chatModelLibrary === "AzureChatOpenAI"
+      ) {
+        return "function_calling";
       } else {
         return null;
       }
@@ -282,13 +350,13 @@ class Agent<Context extends unknown = any> {
   private async raiseIfStoppedOrPaused(): Promise<void> {
     if (this.registerExternalAgentStatusRaiseErrorCallback) {
       if (await this.registerExternalAgentStatusRaiseErrorCallback()) {
-        throw new Error('Interrupted');
+        throw new Error("Interrupted");
       }
     }
 
     if (this.state.stopped || this.state.paused) {
-      logger.log('Agent paused after getting state');
-      throw new Error('Interrupted');
+      logger.log("Agent paused after getting state");
+      throw new Error("Interrupted");
     }
   }
 
@@ -306,22 +374,42 @@ class Agent<Context extends unknown = any> {
 
       await this.raiseIfStoppedOrPaused();
 
-      this.messageManager.add_state_message(state, this.state.last_result, stepInfo, this.settings.use_vision);
+      if (state) {
+        // Added null/undefined check for state
+        this.messageManager.add_state_message(
+          state,
+          this.state.last_result,
+          stepInfo,
+          this.settings.use_vision
+        );
+      } else {
+        logger.warn(
+          "Browser state is null or undefined, skipping add_state_message."
+        );
+        // Potentially throw an error or handle this case as critical
+      }
 
       // Run planner at specified intervals if planner is configured
-      if (this.settings.planner_llm && this.state.n_steps % this.settings.planner_interval === 0) {
+      if (
+        this.settings.planner_llm &&
+        this.state.n_steps % this.settings.planner_interval === 0
+      ) {
         const plan = await this.runPlanner();
-        this.messageManager.add_plan(plan, -1);
+        this.messageManager.add_plan(plan || undefined, -1); // Changed plan to plan || undefined
       }
 
       if (stepInfo && stepInfo.is_last_step()) {
         // Add last step warning
-        const msg = 'Now comes your last step. Use only the "done" action now. No other actions - so here your action sequence must have length 1.\n' +
+        const msg =
+          'Now comes your last step. Use only the "done" action now. No other actions - so here your action sequence must have length 1.\n' +
           'If the task is not yet fully finished as requested by the user, set success in "done" to false! E.g. if not all steps are fully completed.\n' +
           'If the task is fully finished, set success in "done" to true.\n' +
-          'Include everything you found out for the ultimate task in the done text.';
-        logger.log('Last step finishing up');
-        this.messageManager.add_message_with_tokens({ role: 'user', content: msg });
+          "Include everything you found out for the ultimate task in the done text.";
+        logger.log("Last step finishing up");
+        this.messageManager.add_message_with_tokens({
+          role: "user",
+          content: msg,
+        });
         this.AgentOutput = this.DoneAgentOutput;
       }
 
@@ -334,7 +422,11 @@ class Agent<Context extends unknown = any> {
         this.state.n_steps += 1;
 
         if (this.registerNewStepCallback) {
-          await this.registerNewStepCallback(state!, modelOutput, this.state.n_steps);
+          await this.registerNewStepCallback(
+            state!,
+            modelOutput,
+            this.state.n_steps
+          );
         }
 
         if (this.settings.save_conversation_path) {
@@ -358,21 +450,24 @@ class Agent<Context extends unknown = any> {
         await this.registerActionResultCallback(result);
       }
 
-      if (result.length > 0 && result[result.length - 1].is_done) {
-        logger.log(`📄 Result: ${result[result.length - 1].extracted_content}`);
+      const lastResultItem =
+        result.length > 0 ? result[result.length - 1] : undefined;
+      if (lastResultItem && lastResultItem.is_done) {
+        // Added check for lastResultItem
+        logger.log(`📄 Result: ${lastResultItem.extracted_content}`);
       }
 
       this.state.consecutive_failures = 0;
-
     } catch (error) {
-      if ((error as Error).message === 'Interrupted') {
-        logger.log('Agent paused');
+      if ((error as Error).message === "Interrupted") {
+        logger.log("Agent paused");
         this.state.last_result = [
           {
-            error: 'The agent was paused - now continuing actions might need to be repeated',
+            error:
+              "The agent was paused - now continuing actions might need to be repeated",
             include_in_memory: true,
-            is_done: false
-          }
+            is_done: false,
+          },
         ];
         return;
       } else {
@@ -381,14 +476,18 @@ class Agent<Context extends unknown = any> {
       }
     } finally {
       const stepEndTime = Date.now();
-      const actions = modelOutput ? modelOutput.action.map(a => this.excludeUnset(a)) : [];
+      const actions = modelOutput
+        ? modelOutput.action.map((a) => this.excludeUnset(a))
+        : [];
       this.telemetry.capture({
-        name: 'agent_step',
+        name: "agent_step",
         agentId: this.state.agent_id,
         step: this.state.n_steps,
         actions,
         consecutiveFailures: this.state.consecutive_failures,
-        stepError: result ? result.filter(r => r.error).map(r => r.error) : ['No result']
+        stepError: result
+          ? result.filter((r) => r.error).map((r) => r.error)
+          : ["No result"],
       });
 
       if (!result) {
@@ -400,7 +499,7 @@ class Agent<Context extends unknown = any> {
           stepNumber: this.state.n_steps,
           stepStartTime,
           stepEndTime,
-          inputTokens: tokens
+          inputTokens: tokens,
         };
         this.makeHistoryItem(modelOutput, state, result, metadata);
       }
@@ -408,29 +507,42 @@ class Agent<Context extends unknown = any> {
   }
 
   private async handleStepError(error: Error): Promise<ActionResult[]> {
-    const includeTrace = true; // 在实际应用中可能会根据日志级别决定
+    const includeTrace = true; // In real applications, this might depend on the log level
     let errorMsg = this.formatError(error, includeTrace);
-    const prefix = `❌ Result failed ${this.state.consecutive_failures + 1}/${this.settings.max_failures} times:\n `;
+    const prefix = `❌ Result failed ${this.state.consecutive_failures + 1}/${
+      this.settings.max_failures
+    } times:\n `;
 
-    if (error instanceof Error && (error.name === 'ValidationError' || error.name === 'ValueError')) {
+    if (
+      error instanceof Error &&
+      (error.name === "ValidationError" || error.name === "ValueError")
+    ) {
       logger.error(`${prefix}${errorMsg}`);
 
-      if (errorMsg.includes('Max token limit reached')) {
-        // 减少历史记录中的令牌数
-        this.messageManager.settings.max_input_tokens = this.settings.max_input_tokens - 500;
-        logger.log(`Cutting tokens from history - new max input tokens: ${this.messageManager.settings.max_input_tokens}`);
+      if (errorMsg.includes("Max token limit reached")) {
+        // Reduce the number of tokens in the history
+        this.messageManager.settings.max_input_tokens =
+          this.settings.max_input_tokens - 500;
+        logger.log(
+          `Cutting tokens from history - new max input tokens: ${this.messageManager.settings.max_input_tokens}`
+        );
         this.messageManager.cut_messages();
-      } else if (errorMsg.includes('Could not parse response')) {
-        // 给模型提示输出应该是什么样子
-        errorMsg += '\n\nReturn a valid JSON object with the required fields.';
+      } else if (errorMsg.includes("Could not parse response")) {
+        // Provide the model with a hint about what the output should look like
+        errorMsg += "\n\nReturn a valid JSON object with the required fields.";
       }
 
       this.state.consecutive_failures += 1;
     } else {
-      // 处理速率限制错误
-      if (error.name === 'RateLimitError' || error.name === 'ResourceExhausted') {
+      // Handle rate limit errors
+      if (
+        error.name === "RateLimitError" ||
+        error.name === "ResourceExhausted"
+      ) {
         logger.warn(`${prefix}${errorMsg}`);
-        await new Promise(resolve => setTimeout(resolve, this.settings.retry_delay * 1000));
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.settings.retry_delay * 1000)
+        );
         this.state.consecutive_failures += 1;
       } else {
         logger.error(`${prefix}${errorMsg}`);
@@ -438,11 +550,13 @@ class Agent<Context extends unknown = any> {
       }
     }
 
-    return [{
-      error: errorMsg,
-      include_in_memory: true,
-      is_done: false
-    }];
+    return [
+      {
+        error: errorMsg,
+        include_in_memory: true,
+        is_done: false,
+      },
+    ];
   }
 
   private formatError(error: Error, includeTrace: boolean): string {
@@ -461,7 +575,10 @@ class Agent<Context extends unknown = any> {
     let interactedElements: (DOMHistoryElement | null)[];
 
     if (modelOutput) {
-      interactedElements = AgentHistory.get_interacted_element(modelOutput, state.selector_map);
+      interactedElements = AgentHistory.get_interacted_element(
+        modelOutput,
+        state.selector_map
+      );
     } else {
       interactedElements = [];
     }
@@ -471,14 +588,14 @@ class Agent<Context extends unknown = any> {
       title: state.title,
       tabs: state.tabs,
       interacted_element: interactedElements,
-      screenshot: state.screenshot
+      screenshot: state.screenshot,
     });
 
     const historyItem = new AgentHistory({
-      model_output: modelOutput,
+      model_output: modelOutput || undefined, // Changed modelOutput to modelOutput || undefined
       result,
       state: stateHistory,
-      metadata
+      metadata,
     });
 
     this.state.history.history.push(historyItem);
@@ -495,25 +612,31 @@ class Agent<Context extends unknown = any> {
   }
 
   private removeThinkTags(text: string): string {
-    // 移除格式良好的 <think>...</think> 标签
-    text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
-    // 如果有未匹配的结束标签 </think>，移除它及之前的所有内容
-    text = text.replace(/.*?<\/think>/g, '');
+    // Remove well-formatted <think>...</think> tags
+    text = text.replace(/<think>[\s\S]*?<\/think>/g, "");
+    // If there is an unmatched closing tag </think>, remove it and all preceding content
+    text = text.replace(/.*?<\/think>/g, "");
     return text.trim();
   }
 
   private convertInputMessages(inputMessages: BaseMessage[]): BaseMessage[] {
-    if (this.modelName === 'deepseek-reasoner' || this.modelName.includes('deepseek-r1') || this.modelName.includes('deepseek-v3')) {
+    if (
+      this.modelName === "deepseek-reasoner" ||
+      this.modelName.includes("deepseek-r1") ||
+      this.modelName.includes("deepseek-v3")
+    ) {
       return convertInputMessages(inputMessages, this.modelName, true);
     } else {
       return inputMessages;
     }
   }
 
-  private async getNextAction(inputMessages: BaseMessage[]): Promise<AgentOutput> {
+  private async getNextAction(
+    inputMessages: BaseMessage[]
+  ): Promise<AgentOutput> {
     inputMessages = this.convertInputMessages(inputMessages);
 
-    if (this.toolCallingMethod === 'raw') {
+    if (this.toolCallingMethod === "raw") {
       const output = await this.llm.invoke(inputMessages);
       output.content = this.removeThinkTags(String(output.content));
       try {
@@ -521,31 +644,37 @@ class Agent<Context extends unknown = any> {
         return this.AgentOutput.parse(parsedJson);
       } catch (e) {
         logger.warn(`Failed to parse model output: ${output} ${e}`);
-        throw new Error('Could not parse response.');
+        throw new Error("Could not parse response.");
       }
     } else if (this.toolCallingMethod == null) {
-      const structuredLlm = this.llm.withStructuredOutput(this.createAgentOutputTool(), { includeRaw: true });
+      const structuredLlm = this.llm.withStructuredOutput(
+        this.createAgentOutputTool(),
+        { includeRaw: true }
+      );
       if (logger.isDebugEnabled()) {
-        logger.debug('getNextAction', inputMessages);
+        logger.debug("getNextAction", inputMessages);
       }
       const response = await structuredLlm.invoke(inputMessages);
       const parsed = response.data;
 
       if (!response.success || !parsed) {
-        throw new Error('Could not parse response.');
+        throw new Error("Could not parse response.");
       }
 
       return parsed;
     } else {
-      const structuredLlm = this.llm.withStructuredOutput(this.createAgentOutputTool(), {
-        includeRaw: true,
-        method: this.toolCallingMethod
-      });
+      const structuredLlm = this.llm.withStructuredOutput(
+        this.createAgentOutputTool(),
+        {
+          includeRaw: true,
+          method: this.toolCallingMethod,
+        }
+      );
       const response = await structuredLlm.invoke(inputMessages);
       const parsed = response.data;
 
       if (!response.success || !parsed) {
-        throw new Error('Could not parse response.');
+        throw new Error("Could not parse response.");
       }
 
       return parsed;
@@ -553,17 +682,17 @@ class Agent<Context extends unknown = any> {
   }
 
   private extractJsonFromModelOutput(content: string): any {
-    // 实现从模型输出中提取 JSON 的逻辑
+    // Implement logic to extract JSON from model output
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
       return JSON.parse(jsonMatch[1]);
     }
 
-    // 尝试直接解析整个内容
+    // Try to directly parse the entire content
     try {
       return JSON.parse(content);
     } catch (e) {
-      throw new Error('Could not extract JSON from model output');
+      throw new Error("Could not extract JSON from model output");
     }
   }
 
@@ -572,14 +701,14 @@ class Agent<Context extends unknown = any> {
     logger.debug(`Version: ${this.version}, Source: ${this.source}`);
 
     this.telemetry.capture({
-      name: 'agent_start',
+      name: "agent_start",
       agentId: this.state.agent_id,
       useVision: this.settings.use_vision,
       task: this.task,
       modelName: this.modelName,
       chatModelLibrary: this.chatModelLibrary,
       version: this.version,
-      source: this.source
+      source: this.source,
     });
   }
 
@@ -588,7 +717,7 @@ class Agent<Context extends unknown = any> {
 
     if (this.state.history.is_done()) {
       if (this.settings.validate_output) {
-        if (!await this.validateOutput()) {
+        if (!(await this.validateOutput())) {
           return [true, false];
         }
       }
@@ -608,28 +737,31 @@ class Agent<Context extends unknown = any> {
     try {
       this.logAgentRun();
 
-      // 执行初始操作（如果提供）
+      // Execute initial actions if provided
       if (this.initialActions) {
         const result = await this.multiAct(this.initialActions, false);
         this.state.last_result = result;
       }
 
       for (let step = 0; step < maxSteps; step++) {
-        // 检查是否因为太多失败而停止
+        // Check if stopped due to too many failures
         if (this.state.consecutive_failures >= this.settings.max_failures) {
-          logger.error(`❌ Stopping due to ${this.settings.max_failures} consecutive failures`);
+          logger.error(
+            `❌ Stopping due to ${this.settings.max_failures} consecutive failures`
+          );
           break;
         }
 
-        // 每一步前检查控制标志
+        // Check control flags before each step
         if (this.state.stopped) {
-          logger.log('Agent stopped');
+          logger.log("Agent stopped");
           break;
         }
 
         while (this.state.paused) {
-          await new Promise(resolve => setTimeout(resolve, 200)); // 小延迟防止 CPU 空转
-          if (this.state.stopped) { // 暂停时允许停止
+          await new Promise((resolve) => setTimeout(resolve, 200)); // Small delay to prevent CPU spinning
+          if (this.state.stopped) {
+            // Allow stopping while paused
             break;
           }
         }
@@ -638,7 +770,7 @@ class Agent<Context extends unknown = any> {
 
         if (this.state.history.is_done()) {
           if (this.settings.validate_output && step < maxSteps - 1) {
-            if (!await this.validateOutput()) {
+            if (!(await this.validateOutput())) {
               continue;
             }
           }
@@ -648,12 +780,11 @@ class Agent<Context extends unknown = any> {
         }
       }
 
-      logger.log('❌ Failed to complete task in maximum steps');
+      logger.log("❌ Failed to complete task in maximum steps");
       return this.state.history;
-    }
-    finally {
+    } finally {
       this.telemetry.capture({
-        name: 'agent_end',
+        name: "agent_end",
         agentId: this.state.agent_id,
         isDone: this.state.history.is_done(),
         success: this.state.history.is_successful(),
@@ -661,7 +792,7 @@ class Agent<Context extends unknown = any> {
         maxStepsReached: this.state.n_steps >= maxSteps,
         errors: this.state.history.errors(),
         totalInputTokens: this.state.history.total_input_tokens(),
-        totalDurationSeconds: this.state.history.total_duration_seconds()
+        totalDurationSeconds: this.state.history.total_duration_seconds(),
       });
 
       if (!this.injectedBrowserContext && this.browserContext) {
@@ -673,8 +804,8 @@ class Agent<Context extends unknown = any> {
       }
 
       if (this.settings.generate_gif) {
-        let outputPath = 'agent_history.gif';
-        if (typeof this.settings.generate_gif === 'string') {
+        let outputPath = "agent_history.gif";
+        if (typeof this.settings.generate_gif === "string") {
           outputPath = this.settings.generate_gif;
         }
 
@@ -684,14 +815,21 @@ class Agent<Context extends unknown = any> {
   }
 
   private async multiAct(
-    actions: ActionModel[],
+    actions: z.infer<typeof ActionModel>[] | undefined, // Use z.infer
     checkForNewElements: boolean = true
   ): Promise<ActionResult[]> {
     const results: ActionResult[] = [];
 
+    if (!actions) {
+      // Added check for undefined actions
+      return results;
+    }
+
     const cachedSelectorMap = await this.browserContext?.get_selector_map();
     const cachedPathHashes = new Set(
-      Array.from(Object.values(cachedSelectorMap || {})).map(e => e.hash.branch_path_hash)
+      Array.from(Object.values(cachedSelectorMap || {})).map(
+        (e) => e.hash.branch_path_hash
+      )
     );
 
     await this.browserContext?.remove_highlights();
@@ -699,20 +837,26 @@ class Agent<Context extends unknown = any> {
     for (let i = 0; i < actions.length; i++) {
       const action = actions[i];
 
-      if (getActionIndex(action) != null && i !== 0) {
+      if (action && getActionIndex(action) != null && i !== 0) {
+        // Added check for action
         const newState = await this.browserContext?.get_state();
         const newPathHashes = new Set(
-          Array.from(Object.values(newState?.selector_map || {})).map(e => e.hash.branch_path_hash)
+          Array.from(Object.values(newState?.selector_map || {})).map(
+            (e) => e.hash.branch_path_hash
+          )
         );
 
-        if (checkForNewElements && !this.isSubset(newPathHashes, cachedPathHashes)) {
-          // 下一个操作需要索引，但页面上有新元素
+        if (
+          checkForNewElements &&
+          !this.isSubset(newPathHashes, cachedPathHashes)
+        ) {
+          // The next action requires an index, but there are new elements on the page
           const msg = `Something new appeared after action ${i} / ${actions.length}`;
           logger.log(msg);
           results.push({
             extracted_content: msg,
             include_in_memory: true,
-            is_done: false
+            is_done: false,
           });
           break;
         }
@@ -723,10 +867,15 @@ class Agent<Context extends unknown = any> {
       } catch (error) {
         break;
       }
+      if (!action) {
+        // Skip if action is undefined
+        logger.warn(`Action at index ${i} is undefined, skipping.`);
+        continue;
+      }
 
       const result = await this.controller.act(
         action,
-        this.browserContext,
+        this.browserContext!, // Added non-null assertion
         this.settings.page_extraction_llm,
         this.sensitiveData,
         this.settings.available_file_paths,
@@ -736,14 +885,22 @@ class Agent<Context extends unknown = any> {
       results.push(result);
 
       logger.debug(`Executed action ${i + 1} / ${actions.length}`);
-      if (results[results.length - 1].is_done ||
-        results[results.length - 1].error ||
-        i === actions.length - 1) {
+      const lastMultiActResult =
+        results.length > 0 ? results[results.length - 1] : undefined;
+      if (
+        (lastMultiActResult &&
+          (lastMultiActResult.is_done || lastMultiActResult.error)) ||
+        i === actions.length - 1
+      ) {
+        // Added check for lastMultiActResult
         break;
       }
 
-      await new Promise(resolve =>
-        setTimeout(resolve, this.browserContext?.config.wait_between_actions || 1000)
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          this.browserContext?.config.wait_between_actions || 1000
+        )
       );
     }
 
@@ -779,16 +936,19 @@ class Agent<Context extends unknown = any> {
       );
       const messages = [
         new SystemMessage({ content: systemMsg }),
-        content.getUserMessage(this.settings.use_vision)
+        content.getUserMessage(this.settings.use_vision),
       ];
 
       const ValidationResultSchema = z.object({
         is_valid: z.boolean(),
-        reason: z.string()
+        reason: z.string(),
       });
-      const validator = this.llm.withStructuredOutput({
-        schema: ValidationResultSchema,
-      }, { includeRaw: true });
+      const validator = this.llm.withStructuredOutput(
+        {
+          schema: ValidationResultSchema,
+        },
+        { includeRaw: true }
+      );
       const response = await validator.invoke(messages);
       const parsed = response.parsed as z.infer<typeof ValidationResultSchema>;
 
@@ -796,27 +956,29 @@ class Agent<Context extends unknown = any> {
       if (!isValid) {
         logger.log(`❌ Validator decision: ${parsed.reason}`);
         const msg = `The output is not yet correct. ${parsed.reason}.`;
-        this.state.last_result = [{
-          extracted_content: msg,
-          include_in_memory: true,
-          is_done: false
-        }];
+        this.state.last_result = [
+          {
+            extracted_content: msg,
+            include_in_memory: true,
+            is_done: false,
+          },
+        ];
       } else {
         logger.log(`✅ Validator decision: ${parsed.reason}`);
       }
       return isValid;
     }
 
-    // 如果没有浏览器会话，我们无法验证输出
+    // Without a browser session we cannot verify the output
     return true;
   }
 
   private async logCompletion(): Promise<void> {
-    logger.log('✅ Task completed');
+    logger.log("✅ Task completed");
     if (this.state.history.is_successful()) {
-      logger.log('✅ Successfully');
+      logger.log("✅ Successfully");
     } else {
-      logger.log('❌ Unfinished');
+      logger.log("❌ Unfinished");
     }
 
     if (this.registerDoneCallback) {
@@ -825,46 +987,65 @@ class Agent<Context extends unknown = any> {
   }
 
   private async runPlanner(): Promise<string | null> {
-    // 如果没有设置 plannerLlm，跳过规划
+    // If plannerLlm is not set, skip planning
     if (!this.settings.planner_llm) {
       return null;
     }
 
-    // 使用完整的消息历史创建规划器消息历史
+    // Create planner message history using the full message history
     const plannerMessages = [
       this.getPlannerSystemMessage(),
-      ...this.messageManager.get_messages().slice(1) // 使用除第一条外的完整消息历史
+      ...this.messageManager.get_messages().slice(1), // Use the full message history except the first one
     ];
 
     if (!this.settings.use_vision_for_planner && this.settings.use_vision) {
-      const lastStateMessage = plannerMessages[plannerMessages.length - 1];
-      // 从最后一条状态消息中移除图像
-      let newMsg = '';
-      if (Array.isArray(lastStateMessage.content)) {
-        for (const msg of lastStateMessage.content) {
-          if (msg.type === 'text') {
-            newMsg += msg.text;
+      const lastStateMessage =
+        plannerMessages.length > 0
+          ? plannerMessages[plannerMessages.length - 1]
+          : undefined;
+      if (lastStateMessage) {
+        // Added check for lastStateMessage
+        // Remove the image from the last state message
+        let newMsg = "";
+        if (
+          lastStateMessage.content &&
+          Array.isArray(lastStateMessage.content)
+        ) {
+          // Added check for lastStateMessage.content
+          for (const msg of lastStateMessage.content) {
+            if (msg.type === "text" && msg.text) {
+              newMsg += msg.text;
+            }
           }
+        } else if (
+          lastStateMessage.content &&
+          typeof lastStateMessage.content === "string"
+        ) {
+          // Added check for lastStateMessage.content
+          newMsg = lastStateMessage.content;
         }
-      } else {
-        newMsg = lastStateMessage.content;
-      }
 
-      plannerMessages[plannerMessages.length - 1] = new HumanMessage({
-        content: newMsg
-      });
+        if (plannerMessages.length > 0) {
+          // Ensure array is not empty before assignment
+          plannerMessages[plannerMessages.length - 1] = new HumanMessage({
+            content: newMsg,
+          });
+        }
+      }
     }
 
     const convertedMessages = this.convertInputMessages(plannerMessages);
 
-    // 获取规划器输出
+    // Get planner output
     const response = await this.settings.planner_llm.invoke(convertedMessages);
     let plan = String(response.content);
 
-    // 如果是 deepseek-reasoner，移除思考标签
-    if (this.plannerModelName &&
-      (this.plannerModelName.includes('deepseek-r1') ||
-        this.plannerModelName.includes('deepseek-reasoner'))) {
+    // If it is deepseek-reasoner, remove think tags
+    if (
+      this.plannerModelName &&
+      (this.plannerModelName.includes("deepseek-r1") ||
+        this.plannerModelName.includes("deepseek-reasoner"))
+    ) {
       plan = this.removeThinkTags(plan);
     }
 
@@ -889,7 +1070,7 @@ class Agent<Context extends unknown = any> {
     skipFailures: boolean = true,
     delayBetweenActions: number = 2.0
   ): Promise<ActionResult[]> {
-    // 如果提供了初始操作，则执行
+    // Execute initial actions if provided
     if (this.initialActions) {
       const result = await this.multiAct(this.initialActions);
       this.state.last_result = result;
@@ -902,35 +1083,63 @@ class Agent<Context extends unknown = any> {
 
     for (let i = 0; i < history.history.length; i++) {
       const historyItem = history.history[i];
-      const goal = historyItem.model_output?.current_state?.next_goal || '';
-      logger.log(`Replaying step ${i + 1}/${history.history.length}: goal: ${goal}`);
+      if (!historyItem) {
+        // Added check for undefined historyItem
+        logger.warn(`History item at index ${i} is undefined, skipping.`);
+        continue;
+      }
+      const goal = historyItem.model_output?.current_state?.next_goal || "";
+      logger.log(
+        `Replaying step ${i + 1}/${history.history.length}: goal: ${goal}`
+      );
 
-      if (!historyItem.model_output ||
+      if (
+        !historyItem.model_output ||
         !historyItem.model_output.action ||
-        historyItem.model_output.action[0] == null) {
+        historyItem.model_output.action[0] == null
+      ) {
         logger.warn(`Step ${i + 1}: No action to replay, skipping`);
-        results.push({ error: 'No action to replay', include_in_memory: true, is_done: false });
+        results.push({
+          error: "No action to replay",
+          include_in_memory: true,
+          is_done: false,
+        });
         continue;
       }
 
       let retryCount = 0;
       while (retryCount < maxRetries) {
         try {
-          const result = await this.executeHistoryStep(historyItem, delayBetweenActions);
+          const result = await this.executeHistoryStep(
+            historyItem!,
+            delayBetweenActions
+          ); // Added non-null assertion
           results.push(...result);
           break;
         } catch (e) {
           retryCount++;
           if (retryCount === maxRetries) {
-            const errorMsg = `Step ${i + 1} failed after ${maxRetries} attempts: ${e}`;
+            const errorMsg = `Step ${
+              i + 1
+            } failed after ${maxRetries} attempts: ${e}`;
             logger.error(errorMsg);
             if (!skipFailures) {
-              results.push({ error: errorMsg, include_in_memory: true, is_done: false });
+              results.push({
+                error: errorMsg,
+                include_in_memory: true,
+                is_done: false,
+              });
               throw new Error(errorMsg);
             }
           } else {
-            logger.warn(`Step ${i + 1} failed (attempt ${retryCount}/${maxRetries}), retrying...`);
-            await new Promise(resolve => setTimeout(resolve, delayBetweenActions * 1000));
+            logger.warn(
+              `Step ${
+                i + 1
+              } failed (attempt ${retryCount}/${maxRetries}), retrying...`
+            );
+            await new Promise((resolve) =>
+              setTimeout(resolve, delayBetweenActions * 1000)
+            );
           }
         }
       }
@@ -939,22 +1148,35 @@ class Agent<Context extends unknown = any> {
     return results;
   }
 
-  private async executeHistoryStep(historyItem: AgentHistory, delay: number): Promise<ActionResult[]> {
+  private async executeHistoryStep(
+    historyItem: AgentHistory,
+    delay: number
+  ): Promise<ActionResult[]> {
     const state = await this.browserContext?.get_state();
-    if (!state || !historyItem.model_output) {
-      throw new Error('Invalid state or model output');
+    if (!state || !historyItem || !historyItem.model_output) {
+      // Added check for undefined historyItem
+      throw new Error("Invalid state or model output");
     }
 
-    const updatedActions: ActionModel[] = [];
+    const updatedActions: z.infer<typeof ActionModel>[] = []; // Use z.infer
     for (let i = 0; i < historyItem.model_output.action.length; i++) {
+      const actionToUpdate = historyItem.model_output.action[i];
+      if (!actionToUpdate) {
+        // Added check for undefined action
+        logger.warn(
+          `Action at index ${i} in history item is undefined, skipping update.`
+        );
+        continue;
+      }
       const updatedAction = await this.updateActionIndices(
         historyItem.state.interacted_element[i],
-        historyItem.model_output.action[i],
+        actionToUpdate,
         state
       );
-      updatedActions.push(updatedAction);
-
-      if (updatedAction == null) {
+      if (updatedAction) {
+        // Ensure updatedAction is not null before pushing
+        updatedActions.push(updatedAction);
+      } else {
         throw new Error(`Could not find matching element ${i} in current page`);
       }
     }
@@ -963,20 +1185,23 @@ class Agent<Context extends unknown = any> {
     if (this.registerActionResultCallback) {
       await this.registerActionResultCallback(result);
     }
-    await new Promise(resolve => setTimeout(resolve, delay * 1000));
+    await new Promise((resolve) => setTimeout(resolve, delay * 1000));
     return result;
   }
 
   private async updateActionIndices(
     historicalElement: any,
-    action: ActionModel,
+    action: z.infer<typeof ActionModel>, // Use z.infer
     currentState: BrowserState
   ): Promise<any | null> {
     if (!historicalElement || !currentState.element_tree) {
       return action;
     }
 
-    const currentElement = this.findHistoryElementInTree(historicalElement, currentState.element_tree);
+    const currentElement = this.findHistoryElementInTree(
+      historicalElement,
+      currentState.element_tree
+    );
 
     if (!currentElement || currentElement.highlightIndex == null) {
       return null;
@@ -985,71 +1210,104 @@ class Agent<Context extends unknown = any> {
     const oldIndex = getActionIndex(action);
     if (oldIndex !== currentElement.highlightIndex) {
       setActionIndex(action, currentElement.highlightIndex);
-      logger.log(`Element moved in DOM, updated index from ${oldIndex} to ${currentElement.highlightIndex}`);
+      logger.log(
+        `Element moved in DOM, updated index from ${oldIndex} to ${currentElement.highlightIndex}`
+      );
     }
 
     return action;
   }
 
-  private findHistoryElementInTree(historicalElement: any, elementTree: any): any {
-    // 这里需要实现在当前元素树中查找历史元素的逻辑
-    // 这是一个简化的实现，实际应用中可能需要更复杂的匹配算法
-    return HistoryTreeProcessor.find_history_element_in_tree(historicalElement, elementTree);
+  private findHistoryElementInTree(
+    historicalElement: any,
+    elementTree: any
+  ): any {
+    // Here you need to implement the logic to find historical elements in the current element tree
+    // This is a simplified implementation; a more complex matching algorithm may be needed in real applications
+    return HistoryTreeProcessor.find_history_element_in_tree(
+      historicalElement,
+      elementTree
+    );
   }
 
-  public async loadAndRerun(historyFile?: string | any, options: any = {}): Promise<ActionResult[]> {
+  public async loadAndRerun(
+    historyFile?: string | any,
+    options: any = {}
+  ): Promise<ActionResult[]> {
     if (!historyFile) {
-      historyFile = 'AgentHistory.json';
+      historyFile = "AgentHistory.json";
     }
 
-    const history = AgentHistoryList.load_from_file(historyFile, this.AgentOutput );
-    return await this.rerunHistory(history, options.maxRetries, options.skipFailures, options.delayBetweenActions);
+    const history = AgentHistoryList.load_from_file(
+      historyFile,
+      this.AgentOutput
+    );
+    return await this.rerunHistory(
+      history,
+      options.maxRetries,
+      options.skipFailures,
+      options.delayBetweenActions
+    );
   }
-
 
   public saveHistory(filePath?: string | any): void {
     if (!filePath) {
-      filePath = 'AgentHistory.json';
+      filePath = "AgentHistory.json";
     }
 
     const historyJson = JSON.stringify(this.state.history, null, 2);
-    if (typeof filePath === 'string') {
+    if (typeof filePath === "string") {
       fs.writeFileSync(filePath, historyJson);
     }
   }
 
   public pause(): void {
-    logger.log('🔄 pausing Agent');
+    logger.log("🔄 pausing Agent");
     this.state.paused = true;
   }
 
   public resume(): void {
-    logger.log('▶️ Agent resuming');
+    logger.log("▶️ Agent resuming");
     this.state.paused = false;
   }
 
   public stop(): void {
-    logger.log('⏹️ Agent stopping');
+    logger.log("⏹️ Agent stopping");
     this.state.stopped = true;
   }
 
-  private convertInitialActions(actions?: ActionModel[]): ActionModel[] {
+  private convertInitialActions(
+    actions?: z.infer<typeof ActionModel>[] // Use z.infer
+  ): z.infer<typeof ActionModel>[] | undefined { // Use z.infer
+    // Added | undefined
     if (!actions) return undefined;
 
     const convertedActions = [];
     for (const actionDict of actions) {
-      // 每个 actionDict 应该有一个键值对
-      const actionName = Object.keys(actionDict)[0];
+      // Each actionDict should have one key-value pair
+      const actionName = Object.keys(actionDict)[0] as string | undefined; // Added type assertion and undefined
+      if (!actionName) {
+        // Added check for undefined actionName
+        logger.warn("Action name is undefined in initial actions, skipping.");
+        continue;
+      }
       const params = actionDict[actionName];
 
-      // 从注册表中获取此操作的参数模型
+      // Get the parameter model for this action from the registry
       const actionInfo = this.controller.registry.registry.actions[actionName];
+      if (!actionInfo) {
+        // Added check for undefined actionInfo
+        logger.warn(
+          `Action info for "${actionName}" not found in registry, skipping.`
+        );
+        continue;
+      }
       const paramModel = actionInfo.paramsSchema;
 
-      // 使用适当的参数模型创建验证参数
+      // Create validated parameters using the appropriate parameter model
       const validatedParams = paramModel.parse(params);
 
-      // 使用验证参数创建 ActionModel 实例
+      // Create an ActionModel instance using the validated parameters
       const actionModel = { [actionName]: validatedParams };
       convertedActions.push(actionModel);
     }
@@ -1057,39 +1315,44 @@ class Agent<Context extends unknown = any> {
     return convertedActions;
   }
 
-
   private getPlannerSystemMessage(): SystemMessage {
     return new PlannerPrompt({
-      actionDescription: this.controller.registry.get_prompt_description()
+      actionDescription: this.controller.registry.get_prompt_description(),
     }).getSystemMessage();
   }
 
-  private saveConversation(inputMessages: BaseMessage[], modelOutput: AgentOutput, target: string): void {
-    // 实现保存对话的逻辑
+  private saveConversation(
+    inputMessages: BaseMessage[],
+    modelOutput: AgentOutput,
+    target: string
+  ): void {
+    // Implement the logic to save the conversation
     const conversation = {
       inputMessages,
-      modelOutput
+      modelOutput,
     };
 
-    fs.writeFileSync(
-      target,
-      JSON.stringify(conversation, null, 2),
-      { encoding: this.settings.save_conversation_path as 'utf-8' || 'utf-8' }
-    );
+    fs.writeFileSync(target, JSON.stringify(conversation, null, 2), {
+      encoding: (this.settings.save_conversation_path as "utf-8") || "utf-8",
+    });
   }
 
   private createAgentOutputTool() {
     return {
-      name: 'AgentOutput',
+      name: "AgentOutput",
       schema: this.AgentOutput,
-      description: 'AgentOutput model with custom actions',
-    }
+      description: "AgentOutput model with custom actions",
+    };
   }
 
-  private createHistoryGif(task: string, history: AgentHistoryList, outputPath: string): void {
-    throw new Error('Method not implemented.');
+  private createHistoryGif(
+    task: string,
+    history: AgentHistoryList,
+    outputPath: string
+  ): void {
+    throw new Error("Method not implemented.");
   }
 }
 
-// 导出类
+// Export class
 export { Agent };

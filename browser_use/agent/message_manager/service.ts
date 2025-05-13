@@ -287,6 +287,11 @@ export class MessageManager {
 
     const msg = this.state.history.messages[this.state.history.messages.length - 1];
 
+    if (!msg || !msg.message || !msg.metadata) { // Added null checks for msg, msg.message and msg.metadata
+        logger.warn("cut_messages: Last message or its properties are undefined.");
+        return;
+    }
+
     // if list with image remove image
     if (Array.isArray(msg.message.content)) {
       let text = '';
@@ -294,7 +299,7 @@ export class MessageManager {
       for (let i = 0; i < msg.message.content.length; i++) {
         const item = msg.message.content[i];
 
-        if ('image_url' in item) {
+        if (item && 'image_url' in item) { // Added null check for item
           msg.message.content.splice(i, 1);
           i--;
           msg.metadata.tokens -= this.settings.image_tokens!;
@@ -302,13 +307,16 @@ export class MessageManager {
           logger.debug(
             `Removed image with ${this.settings.image_tokens} tokens - total tokens now: ${this.state.history.current_tokens}/${this.settings.max_input_tokens}`
           );
-        } else if ('text' in item && typeof item === 'object') {
+        } else if (item && 'text' in item && typeof item === 'object') { // Added null check for item
           text += item.text;
         }
       }
 
       msg.message.content = text;
-      this.state.history.messages[this.state.history.messages.length - 1] = msg;
+      // Ensure msg is still valid before assignment, though it should be if we reached here.
+      if (this.state.history.messages.length > 0) {
+        this.state.history.messages[this.state.history.messages.length - 1] = msg;
+      }
     }
 
     if (this.state.history.current_tokens - this.settings.max_input_tokens <= 0) {
@@ -316,7 +324,7 @@ export class MessageManager {
     }
 
     // Calculate the proportion of content to remove
-    const proportion_to_remove = diff / msg.metadata.tokens;
+    const proportion_to_remove = diff / msg.metadata.tokens; // msg.metadata is checked above
     if (proportion_to_remove > 0.99) {
       throw new Error(
         `Max token limit reached - history is too long - reduce the system prompt or task. ` +
@@ -325,10 +333,10 @@ export class MessageManager {
     }
 
     logger.debug(
-      `Removing ${proportion_to_remove * 100}% of the last message (${proportion_to_remove * msg.metadata.tokens} / ${msg.metadata.tokens} tokens)`
+      `Removing ${proportion_to_remove * 100}% of the last message (${proportion_to_remove * msg.metadata.tokens} / ${msg.metadata.tokens} tokens)` // msg.metadata is checked
     );
 
-    const content = msg.message.content as string;
+    const content = msg.message.content as string; // msg.message is checked above
     const characters_to_remove = Math.floor(content.length * proportion_to_remove);
     const truncated_content = content.slice(0, -characters_to_remove);
 
@@ -341,11 +349,15 @@ export class MessageManager {
 
     const last_msg = this.state.history.messages[this.state.history.messages.length - 1];
 
-    logger.debug(
-      `Added message with ${last_msg.metadata.tokens} tokens - total tokens now: ` +
-      `${this.state.history.current_tokens}/${this.settings.max_input_tokens} - ` +
-      `total messages: ${this.state.history.messages.length}`
-    );
+    if (last_msg && last_msg.metadata) { // Added null check for last_msg and last_msg.metadata
+        logger.debug(
+          `Added message with ${last_msg.metadata.tokens} tokens - total tokens now: ` +
+          `${this.state.history.current_tokens}/${this.settings.max_input_tokens} - ` +
+          `total messages: ${this.state.history.messages.length}`
+        );
+    } else {
+        logger.warn("cut_messages: last_msg or its metadata is undefined after truncation and re-adding.");
+    }
   }
 
   removeLastStateMessage(): void {

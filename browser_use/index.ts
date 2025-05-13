@@ -4,9 +4,10 @@ setupLogging();
 
 export { Agent } from "./agent/service";
 export { Controller } from './controller/service';
-export { Browser, BrowserConfig } from './browser/browser';
+export { Browser } from "./browser/browser";
+export type { BrowserConfig } from "./browser/browser";
 export { BrowserContext, BrowserContextConfig } from './browser/context';
-export { BaseChatModel, Message, BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage } from "./models/langchain";
-export { ChatOpenAI } from './models/openai';
-export { ChatQianfan } from './models/qianfan';
+export type { Message } from "./models/langchain";
+export { BaseChatModel, BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage } from "./models/langchain";
+export { ChatOpenAI } from "./models/openai";
 export { ChatOllama } from './models/ollama';

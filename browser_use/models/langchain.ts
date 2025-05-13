@@ -11,7 +11,7 @@ export interface Content {
     }
 }
 
-export interface Message {
+export interface Message { // Ensure Message is exported
     role?: string;
     type?: string;
     content: string | Content[];
@@ -31,6 +31,12 @@ export class StructedTool {
     name?: string;
     description?: string;
     schema: z.ZodType<any>;
+
+    constructor(data: { name?: string, description?: string, schema: z.ZodType<any> }) { // Added constructor
+        this.name = data.name;
+        this.description = data.description;
+        this.schema = data.schema;
+    }
 }
 
 export class BaseMessage implements Message {
@@ -41,6 +47,7 @@ export class BaseMessage implements Message {
     additional_kwargs?: Message['additional_kwargs'];
 
     constructor(data: Message) {
+        this.content = data.content; // Initialize content
         Object.assign(this, data);
     }
 
@@ -126,12 +133,12 @@ export function formatTools(rawTools: StructedTool[]): {tools?: any[], tool_choi
             }
         });
     }
-    const tool_choice = {
+    const tool_choice = rawTools[0]?.name ? { // Added check for rawTools[0].name
         type: 'function',
         function: {
             name: rawTools[0].name
         }
-    };
+    } : undefined;
     return {tools, tool_choice};
 }
 
@@ -162,14 +169,59 @@ export class BaseChatModel {
         return {
             async invoke<T = any>(rawMessages: BaseMessage[]): Promise<T> {
                 const message = await self.request(self.formatMessages(rawMessages, tool));
-                if (message.tool_calls || options?.method === 'function_calling') {
-                    const args = message.tool_calls?.[0]?.function?.arguments || message.content;
-                    if (!args) {
-                        return null;
-                    }
-                    return tool.schema.safeParse(typeof args === 'string' ? JSON.parse(args) : args) as T;
+
+                // Check for tool calls, potentially nested in additional_kwargs
+                let actualToolCalls = message.tool_calls;
+                if (!actualToolCalls && message.additional_kwargs?.tool_calls) {
+                    actualToolCalls = message.additional_kwargs.tool_calls;
                 }
-                return tool.schema.safeParse(JSON.parse(message.content)) as T;
+
+                if (actualToolCalls || options?.method === 'function_calling') {
+                    const toolCall = actualToolCalls?.[0];
+                    if (!toolCall || !toolCall.function || typeof toolCall.function.arguments !== 'string') {
+                        const errorDetail = "Tool call or function arguments missing/invalid in LLM response.";
+                        console.error(errorDetail, "Raw message:", JSON.stringify(message, null, 2));
+                        return { success: false, error: new Error(errorDetail), raw: message } as T;
+                    }
+                    const argsString = toolCall.function.arguments;
+                    try {
+                        const parsedArgs = JSON.parse(argsString);
+                        const validationResult = tool.schema.safeParse(parsedArgs);
+                        if (validationResult.success) {
+                            return { success: true, data: validationResult.data, raw: message } as T;
+                        } else {
+                            console.error("Zod validation failed for tool call arguments. Error:", JSON.stringify(validationResult.error, null, 2));
+                            console.error("Parsed arguments that failed validation:", JSON.stringify(parsedArgs, null, 2));
+                            return { success: false, error: validationResult.error, raw: message } as T;
+                        }
+                    } catch (e: any) {
+                        console.error("JSON.parse failed for tool call arguments. Error:", e.message);
+                        console.error("Arguments string that failed parsing:", argsString);
+                        return { success: false, error: e, raw: message } as T;
+                    }
+                }
+
+                if (typeof message.content === 'string') {
+                    try {
+                        const parsedContent = JSON.parse(message.content);
+                        const validationResult = tool.schema.safeParse(parsedContent);
+                        if (validationResult.success) {
+                            return { success: true, data: validationResult.data, raw: message } as T;
+                        } else {
+                            console.error("Zod validation failed for message content. Error:", JSON.stringify(validationResult.error, null, 2));
+                            console.error("Parsed content that failed validation:", JSON.stringify(parsedContent, null, 2));
+                            return { success: false, error: validationResult.error, raw: message } as T;
+                        }
+                    } catch (e: any) {
+                        console.error("JSON.parse failed for message content. Error:", e.message);
+                        console.error("Content string that failed parsing:", message.content);
+                        return { success: false, error: e, raw: message } as T;
+                    }
+                } else {
+                     const errorDetail = "LLM response content is not a string and no tool call was made/processed.";
+                     console.error(errorDetail, "Raw message:", JSON.stringify(message, null, 2));
+                     return { success: false, error: new Error(errorDetail), raw: message } as T;
+                }
             }
         }
     }
