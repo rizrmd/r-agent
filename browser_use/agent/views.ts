@@ -1,16 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
+import { z } from 'zod';
 import { BaseChatModel } from '../models/langchain';
-import { MessageManagerState } from './message_manager/views';
+import { MessageManagerState, MessageHistory } from './message_manager/views';
 import { BrowserStateHistory } from '../browser/views';
+import {
+  SerializableAgentState,
+  SerializableMessageManagerState,
+  SerializableMessageHistory,
+  SerializableAgentHistoryList,
+  SerializableAgentHistoryItem
+} from './serializable_views';
 import {
   DOMElementNode,
   DOMHistoryElement,
   HistoryTreeProcessor
 } from '../dom/history_tree_processor/service';
 import { SelectorMap } from '../dom/views';
-import { z } from 'zod';
 
 export type ToolCallingMethod = 'function_calling' | 'json_mode' | 'raw' | 'auto';
 
@@ -68,6 +75,50 @@ export class AgentState {
     this.history = new AgentHistoryList({ history: [] });
     this.message_manager_state = new MessageManagerState();
     Object.assign(this, data || {});
+  }
+
+  toSerializable(): SerializableAgentState {
+    const serializableMessageHistory: SerializableMessageHistory = {
+      messages: this.message_manager_state.history.messages.map(m => m.toJSON()),
+      current_tokens: this.message_manager_state.history.current_tokens,
+    };
+
+    const serializableMessageManagerState: SerializableMessageManagerState = {
+      history: serializableMessageHistory,
+      tool_id: this.message_manager_state.tool_id,
+    };
+
+    return {
+      agent_id: this.agent_id,
+      n_steps: this.n_steps,
+      consecutive_failures: this.consecutive_failures,
+      last_result: this.last_result ? JSON.parse(JSON.stringify(this.last_result)) : undefined,
+      history: this.history.toJSON(), // Leverages existing AgentHistoryList.toJSON()
+      last_plan: this.last_plan,
+      paused: this.paused,
+      stopped: this.stopped,
+      message_manager_state: serializableMessageManagerState,
+    };
+  }
+
+  static fromSerializable(data: SerializableAgentState, outputModel: z.ZodType<any>): AgentState {
+    const agentState = new AgentState(); // Initializes default history and message_manager_state
+
+    agentState.agent_id = data.agent_id;
+    agentState.n_steps = data.n_steps;
+    agentState.consecutive_failures = data.consecutive_failures;
+    agentState.last_result = data.last_result ? JSON.parse(JSON.stringify(data.last_result)) : undefined;
+    agentState.last_plan = data.last_plan;
+    agentState.paused = data.paused;
+    agentState.stopped = data.stopped;
+
+    // Reconstruct MessageManagerState
+    agentState.message_manager_state = MessageManagerState.fromSerializable(data.message_manager_state);
+    
+    // Reconstruct AgentHistoryList
+    agentState.history = AgentHistoryList.fromSerializable(data.history, outputModel);
+
+    return agentState;
   }
 }
 
@@ -197,6 +248,37 @@ export class AgentHistory {
       metadata: this.metadata,
     };
   }
+
+  static fromSerializable(data: SerializableAgentHistoryItem, outputModel: z.ZodType<any>): AgentHistory {
+    let model_output_parsed: AgentOutput | undefined = undefined;
+    if (data.model_output) {
+      // Ensure model_output is an object before parsing. It might be null.
+      if (typeof data.model_output === 'object' && data.model_output !== null) {
+        try {
+          // Assuming AgentOutputSchema is the correct schema for model_output.current_state and model_output.action
+          model_output_parsed = outputModel.parse(data.model_output) as AgentOutput;
+        } catch (e) {
+          console.error("Error parsing model_output during AgentHistory.fromSerializable:", e);
+          // Decide how to handle parsing errors: throw, log, or set to undefined
+          model_output_parsed = undefined; 
+        }
+      } else {
+        // if data.model_output is not a suitable object, treat as undefined or handle as error
+        model_output_parsed = undefined;
+      }
+    }
+
+    // Reconstruct BrowserStateHistory - assuming it has a fromJSON or similar static method
+    // For now, we'll pass the plain object. This might need adjustment if BrowserStateHistory needs specific reconstruction.
+    const browserStateHistory = BrowserStateHistory.fromJSON(data.state as any); // Cast to any if fromJSON expects specific type not matching Record<string,any>
+
+    return new AgentHistory({
+      model_output: model_output_parsed,
+      result: data.result as ActionResult[], // Assuming ActionResult needs no further processing
+      state: browserStateHistory,
+      metadata: data.metadata, // Assuming StepMetadata needs no further processing
+    });
+  }
 }
 
 export class AgentHistoryList {
@@ -257,24 +339,14 @@ export class AgentHistoryList {
   }
 
   static load_from_file(filepath: string, outputModel: z.ZodType<any>): AgentHistoryList {
-    const data = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
+    const fileContent = fs.readFileSync(filepath, 'utf-8');
+    const data = JSON.parse(fileContent) as SerializableAgentHistoryList; // Cast to ensure structure
+    return AgentHistoryList.fromSerializable(data, outputModel);
+  }
 
-    // Loop through history and validate output_model actions to enrich with custom actions
-    for (const h of data.history) {
-      if (h.model_output) {
-        if (typeof h.model_output === 'object') {
-          h.model_output = outputModel.parse(h.model_output);
-        } else {
-          h.model_output = null;
-        }
-      }
-
-      if (!('interacted_element' in h.state)) {
-        h.state.interacted_element = null;
-      }
-    }
-
-    return new AgentHistoryList(data);
+  static fromSerializable(data: SerializableAgentHistoryList, outputModel: z.ZodType<any>): AgentHistoryList {
+    const historyItems = data.history.map((h_data: SerializableAgentHistoryItem) => AgentHistory.fromSerializable(h_data, outputModel));
+    return new AgentHistoryList({ history: historyItems });
   }
 
   last_action(): Record<string, any> | null {

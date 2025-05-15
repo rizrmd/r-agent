@@ -77,6 +77,29 @@ export class BrowserStateHistory {
     data['title'] = this.title;
     return data;
   }
+
+  static fromJSON(data: Record<string, any>): BrowserStateHistory {
+    // Ensure interacted_element is parsed correctly if it was stringified
+    const interacted_element = (data['interacted_element'] as (string | null)[]).map(el_str => {
+      if (el_str) {
+        try {
+          return JSON.parse(el_str) as DOMHistoryElement;
+        } catch (e) {
+          console.error("Error parsing interacted_element item:", e);
+          return null;
+        }
+      }
+      return null;
+    });
+
+    return new BrowserStateHistory({
+      url: data['url'] as string,
+      title: data['title'] as string,
+      tabs: data['tabs'] as TabInfo[],
+      interacted_element: interacted_element,
+      screenshot: data['screenshot'] as string | null,
+    });
+  }
 }
 
 // Error classes

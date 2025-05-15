@@ -6,6 +6,7 @@ import {
   ToolMessage
 } from '../../models/langchain';
 import { AgentOutput } from '../views';
+import { SerializableMessageHistory, SerializableMessageManagerState, SerializableManagedMessage } from '../serializable_views';
 
 export interface MessageMetadata {
   tokens: number;
@@ -28,7 +29,10 @@ export class ManagedMessage {
     const messageData = data.message;
     let message: BaseMessage;
 
-    switch (messageData._type) {
+    // Determine the type, preferring _type but falling back to type
+    const messageType = messageData._type || messageData.type;
+
+    switch (messageType) {
       case 'ai':
         message = AIMessage.fromJSON(messageData);
         break;
@@ -42,13 +46,19 @@ export class ManagedMessage {
         message = ToolMessage.fromJSON(messageData);
         break;
       default:
-        throw new Error(`Unknown message type: ${messageData._type}`);
+        throw new Error(`Unknown message type: ${messageType} (original _type: ${messageData._type}, original type: ${messageData.type})`);
     }
 
     return new ManagedMessage(
       message,
       { tokens: data.metadata.tokens }
     );
+  }
+
+  static fromSerializable(data: SerializableManagedMessage): ManagedMessage {
+    // This assumes SerializableManagedMessage structure is compatible with what fromJSON expects
+    // which it should be if SerializableManagedMessage = ReturnType<ManagedMessage['toJSON']>
+    return ManagedMessage.fromJSON(data);
   }
 }
 
@@ -121,6 +131,13 @@ export class MessageHistory {
       }
     }
   }
+
+  static fromSerializable(data: SerializableMessageHistory): MessageHistory {
+    const history = new MessageHistory();
+    history.messages = data.messages.map(m => ManagedMessage.fromSerializable(m));
+    history.current_tokens = data.current_tokens;
+    return history;
+  }
 }
 
 export class MessageManagerState {
@@ -128,4 +145,9 @@ export class MessageManagerState {
     public history: MessageHistory = new MessageHistory(),
     public tool_id: number = 1
   ) { }
+
+  static fromSerializable(data: SerializableMessageManagerState): MessageManagerState {
+    const history = MessageHistory.fromSerializable(data.history);
+    return new MessageManagerState(history, data.tool_id);
+  }
 }
