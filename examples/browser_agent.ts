@@ -1,6 +1,6 @@
-import { BrowserAgent } from "../../browser_use";
-import { ChatGroqAI } from "../../browser_use/models/groq";
-import { ChatOpenRouterAI } from "../../browser_use/models/openrouter";
+import { BrowserAgent } from "../browser_use";
+import { ChatGroqAI } from "../browser_use/models/groq";
+import { ChatOpenRouterAI } from "../browser_use/models/openrouter";
 
 // Initialize LLM
 const llm = new ChatGroqAI({
@@ -10,7 +10,7 @@ const llm = new ChatGroqAI({
 
 // const llm = new ChatOpenRouterAI({
 //   modelName: "meta-llama/llama-4-scout",
-//   // modelName: "google/gemini-2.5-pro-preview", 
+//   // modelName: "google/gemini-2.5-pro-preview",
 //   apiKey: process.env.OPENROUTER_API_KEY,
 // });
 
@@ -30,7 +30,11 @@ const agent = new BrowserAgent(
       );
     },
     registerDoneCallback(history) {
-      console.log("Done! History:", history.is_successful(), history.final_result());
+      console.log(
+        "Done! History:",
+        history.is_successful(),
+        history.final_result()
+      );
     },
   }
 );

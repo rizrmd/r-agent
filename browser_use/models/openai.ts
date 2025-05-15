@@ -1,4 +1,4 @@
-import { BaseChatModel, BaseMessage, formatToolCall, formatTools, RequestParams, StructedTool } from "./langchain";
+import { BaseChatModel, BaseMessage, formatToolCall, formatTools, RequestParams, StructuredTool } from "./langchain";
 
 export class ChatOpenAI extends BaseChatModel {
     timeout?: number;
@@ -20,7 +20,7 @@ export class ChatOpenAI extends BaseChatModel {
         this.baseUrl = params.baseUrl || 'https://api.openai.com/v1';
     }
 
-    formatMessages(rawMessages: BaseMessage[], tool: StructedTool): RequestParams {
+    formatMessages(rawMessages: BaseMessage[], tool: StructuredTool): RequestParams {
         const messages: any[] = [];
         for (const m of rawMessages) {
             const newMsg: Record<string, any> = {

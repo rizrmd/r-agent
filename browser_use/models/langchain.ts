@@ -34,7 +34,7 @@ export interface Message {
   };
 }
 
-export class StructedTool {
+export class StructuredTool {
   name?: string;
   description?: string;
   schema: z.ZodType<any>;
@@ -119,9 +119,9 @@ export function formatToolCall(
   for (const tool_call_item of additional.tool_calls) {
     let args_string: string;
 
-    if (typeof tool_call_item.args === 'string') {
+    if (typeof tool_call_item.args === "string") {
       // Attempt to sanitize if it's already a string and potentially malformed
-      args_string = tool_call_item.args.replace(/}\/function"?$/, '}');
+      args_string = tool_call_item.args.replace(/}\/function"?$/, "}");
       try {
         // Validate if it's valid JSON after sanitization, otherwise stringify it as a fallback
         JSON.parse(args_string);
@@ -148,7 +148,7 @@ export function formatToolCall(
   return formatted_tool_calls;
 }
 
-export function formatTools(rawTools: StructedTool[]): {
+export function formatTools(rawTools: StructuredTool[]): {
   tools?: any[];
   tool_choice?: any;
 } {
@@ -190,7 +190,10 @@ export class BaseChatModel {
     throw new Error("Not implemented");
   }
 
-  formatMessages(messages: BaseMessage[], tool?: StructedTool): RequestParams {
+  formatMessages(
+    messages: BaseMessage[],
+    tool?: StructuredTool
+  ): RequestParams {
     return { messages };
   }
 
@@ -200,12 +203,19 @@ export class BaseChatModel {
   }
 
   withStructuredOutput(
-    tool: StructedTool,
+    tool: StructuredTool,
     options: { includeRaw?: boolean; method?: ToolCallingMethod }
   ) {
     const self = this;
     return {
-      async invoke<T = any>(rawMessages: BaseMessage[]): Promise<T> {
+      async invoke<
+        T extends {
+          success: boolean;
+          error?: Error | z.ZodError<any>;
+          raw: any;
+          data?: z.infer<StructuredTool["schema"]>;
+        }
+      >(rawMessages: BaseMessage[]): Promise<T> {
         const message = await self.request(
           self.formatMessages(rawMessages, tool)
         );

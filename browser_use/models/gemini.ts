@@ -1,4 +1,4 @@
-import { BaseChatModel, BaseMessage, formatTools, RequestParams, StructedTool, Content } from "./langchain";
+import { BaseChatModel, BaseMessage, formatTools, RequestParams, StructuredTool, Content } from "./langchain";
 
 // Helper function to clean and transform schema for Gemini
 function cleanAndTransformSchemaForGemini(schema: any): any {
@@ -47,7 +47,7 @@ export class ChatGeminiAI extends BaseChatModel {
         this.baseUrl = params.baseUrl || 'https://generativelanguage.googleapis.com/v1beta/models';
     }
 
-    formatMessages(rawMessages: BaseMessage[], tool?: StructedTool): RequestParams {
+    formatMessages(rawMessages: BaseMessage[], tool?: StructuredTool): RequestParams {
         const geminiContents: any[] = [];
         const systemInstructions: string[] = [];
 

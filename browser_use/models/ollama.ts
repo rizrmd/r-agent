@@ -3,7 +3,7 @@ import {
   BaseMessage,
   Message,
   RequestParams,
-  StructedTool,
+  StructuredTool,
 } from "./langchain";
 import { formatTools } from "./langchain";
 
@@ -77,7 +77,7 @@ export class ChatOllama extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tool: StructedTool
+    tool: StructuredTool
   ): RequestParams {
     const messages: any[] = [];
     for (const m of rawMessages) {

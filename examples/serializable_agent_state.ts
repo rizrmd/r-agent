@@ -1,7 +1,7 @@
-import { BrowserAgent } from "../../browser_use";
-import { ChatGroqAI } from "../../browser_use/models/groq";
-import { SerializableAgentState } from "../../browser_use/agent/serializable_views";
-import { AgentState, AgentOutputSchema } from "../../browser_use/agent/views"; // Added AgentOutputSchema
+import { BrowserAgent } from "../browser_use";
+import { ChatGroqAI } from "../browser_use/models/groq";
+import { SerializableAgentState } from "../browser_use/agent/serializable_views";
+import { AgentState, AgentOutputSchema } from "../browser_use/agent/views"; // Added AgentOutputSchema
 import * as fs from "fs";
 
 // Initialize LLM

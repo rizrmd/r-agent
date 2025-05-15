@@ -5,7 +5,7 @@ import {
   formatToolCall,
   formatTools,
   RequestParams,
-  StructedTool,
+  StructuredTool,
 } from "./langchain";
 import { join } from "path";
 import { cleanStringField } from "./response_parser";
@@ -32,7 +32,7 @@ export class ChatGroqAI extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tool: StructedTool
+    tool: StructuredTool
   ): RequestParams {
     const messages: any[] = [];
     for (const m of rawMessages) {

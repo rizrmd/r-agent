@@ -4,7 +4,7 @@ import {
   formatToolCall,
   formatTools,
   RequestParams,
-  StructedTool,
+  StructuredTool,
 } from "./langchain";
 import { cleanStringField, parseJsonFromResponseText } from "./response_parser";
 
@@ -30,7 +30,7 @@ export class ChatOpenRouterAI extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tool: StructedTool
+    tool: StructuredTool
   ): RequestParams {
     const messages: any[] = [];
     for (const m of rawMessages) {
