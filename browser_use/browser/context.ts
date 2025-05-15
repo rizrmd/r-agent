@@ -2,9 +2,9 @@
  * Playwright browser on steroids.
  */
 
-import type { Browser as PlaywrightBrowser } from "playwright";
-import type { BrowserContext as PlaywrightBrowserContext } from "playwright";
-import type { ElementHandle, FrameLocator, Page } from "playwright";
+import type { Browser as PlaywrightBrowser } from "patchright";
+import type { BrowserContext as PlaywrightBrowserContext } from "patchright";
+import type { ElementHandle, FrameLocator, Page } from "patchright";
 import * as fs from "fs";
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
@@ -22,7 +22,7 @@ import { timeExecutionAsync, timeExecutionSync } from "../utils";
 import { Browser } from "./browser";
 import { Logger } from "../utils";
 
-export type { Browser } from "playwright";
+export type { Browser } from "patchright";
 
 const logger = new Logger("browser_context");
 
@@ -244,7 +244,7 @@ class BrowserContext {
      */
     logger.debug("Initializing browser context");
 
-    const playwright_browser = await this.browser.get_playwright_browser();
+    const playwright_browser = await this.browser.get_patchright_browser();
     const context = await this.create_context(playwright_browser);
     this.add_new_page_listener(context); // Ensures 'page' event listener is set up
 
@@ -1052,13 +1052,13 @@ window.navigator.permissions.query = (parameters) => (
       await page.evaluate(`
 try {
     // Remove the highlight container and all its contents
-    const container = document.getElementById('playwright-highlight-container');
+    const container = document.getElementById('patchright-highlight-container');
     if (container) {
         container.remove();
     }
 
     // Remove highlight attributes from elements
-    const highlightedElements = document.querySelectorAll('[browser-user-highlight-id^="playwright-highlight-"]');
+    const highlightedElements = document.querySelectorAll('[browser-user-highlight-id^="patchright-highlight-"]');
     highlightedElements.forEach(el => {
         el.removeAttribute('browser-user-highlight-id');
     });

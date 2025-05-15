@@ -1,7 +1,7 @@
 import { BrowserState } from '../browser/views';
 import { HumanMessage, SystemMessage } from '../models/langchain';
 import { systemPromptTemplate } from './system_prompt';
-import { ActionResult, AgentStepInfo } from './views';
+import { ActionResult, AgentStepInfo, AgentOutput } from './views';
 
 export class SystemPrompt {
   private defaultActionDescription: string;
@@ -51,17 +51,20 @@ export class AgentMessagePrompt {
   private result?: ActionResult[];
   private includeAttributes: string[];
   private stepInfo?: AgentStepInfo;
+  private previousBrain?: AgentOutput['current_state'];
 
   constructor(
     state: BrowserState,
     result?: ActionResult[],
     includeAttributes: string[] = [],
-    stepInfo?: AgentStepInfo
+    stepInfo?: AgentStepInfo,
+    previousBrain?: AgentOutput['current_state']
   ) {
     this.state = state;
     this.result = result;
     this.includeAttributes = includeAttributes;
     this.stepInfo = stepInfo;
+    this.previousBrain = previousBrain;
   }
 
   public getUserMessage(useVision: boolean = true): HumanMessage {
@@ -96,7 +99,20 @@ export class AgentMessagePrompt {
     const timeStr = new Date().toLocaleString();
     stepInfoDescription += ` Current date and time: ${timeStr}`;
 
-    let stateDescription = `
+    let stateDescription = '';
+
+    if (this.previousBrain) {
+      stateDescription += `
+[Resuming Task]
+The agent is resuming from a previously saved state.
+Last recorded evaluation of previous goal: "${this.previousBrain.evaluation_previous_goal}"
+Last recorded memory: "${this.previousBrain.memory}"
+The agent was about to work on the next goal: "${this.previousBrain.next_goal}"
+---
+`;
+    }
+
+    stateDescription += `
 [Task history memory ends]
 [Current state starts here]
 The following is one-time information - if you need to remember it write it to memory:

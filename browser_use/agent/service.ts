@@ -87,6 +87,7 @@ class BrowserAgent<Context extends unknown = any> {
   private modelName!: string;
   private plannerModelName?: string;
   private initialActions?: Array<{ [k: string]: Record<string, any> }>;
+  private initialLoadedNSteps?: number;
 
   constructor(
     task: string,
@@ -267,6 +268,10 @@ class BrowserAgent<Context extends unknown = any> {
     // Telemetry
     this.telemetry = new ProductTelemetry();
 
+    if (options.injectedAgentState) {
+      this.initialLoadedNSteps = options.injectedAgentState.n_steps;
+    }
+
     if (this.settings.save_conversation_path) {
       logger.log(
         `Saving conversation to ${this.settings.save_conversation_path}`
@@ -319,12 +324,26 @@ class BrowserAgent<Context extends unknown = any> {
       await this.raiseIfStoppedOrPaused();
 
       if (state) {
+        let previousBrainForPrompt: AgentOutput['current_state'] | undefined = undefined;
+        if (
+          this.initialLoadedNSteps !== undefined &&
+          this.state.n_steps === this.initialLoadedNSteps &&
+          this.state.history.history.length > 0
+        ) {
+          const lastHistoryItem = this.state.history.history[this.state.history.history.length - 1];
+          if (lastHistoryItem?.model_output?.current_state) {
+            previousBrainForPrompt = lastHistoryItem.model_output.current_state;
+            logger.debug(`Resuming. Using previous brain for prompt: ${JSON.stringify(previousBrainForPrompt)}`);
+          }
+        }
+
         // Added null/undefined check for state
         this.messageManager.add_state_message(
           state,
           this.state.last_result,
           stepInfo,
-          this.settings.use_vision
+          this.settings.use_vision,
+          previousBrainForPrompt
         );
       } else {
         logger.warn(
@@ -566,7 +585,6 @@ class BrowserAgent<Context extends unknown = any> {
 
   private logAgentRun(): void {
     logger.log(`🚀 Starting task: ${this.task}`);
-    logger.debug(`Version: ${this.version}, Source: ${this.source}`);
 
     this.telemetry.capture({
       name: "agent_start",

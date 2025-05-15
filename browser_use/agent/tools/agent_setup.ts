@@ -48,7 +48,6 @@ export function setBrowserUseVersionAndSource(): {
     version = "unknown";
     source = "unknown";
   }
-  logger.log(`Version: ${version}, Source: ${source}`);
   return { version, source };
 }
 

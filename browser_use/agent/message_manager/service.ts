@@ -129,7 +129,8 @@ export class MessageManager {
     state: BrowserState,
     result?: ActionResult[],
     step_info?: AgentStepInfo,
-    use_vision: boolean = true
+    use_vision: boolean = true,
+    previous_brain?: AgentOutput['current_state']
   ): void {
     // if keep in memory, add directly to history and add state without result
     if (result) {
@@ -162,7 +163,8 @@ export class MessageManager {
       state,
       result,
       this.settings.include_attributes,
-      step_info
+      step_info,
+      previous_brain
     ).getUserMessage(use_vision);
 
     this._add_message_with_tokens(state_message);

@@ -23,9 +23,6 @@ class PostHog {
 export class ProductTelemetry {
   private static instance: ProductTelemetry;
   private readonly USER_ID_PATH: string;
-  private readonly PROJECT_API_KEY = 'phc_F8JMNjW1i2KbGUTaW1unnDdLSPCoyc52SGRU0JecaUh';
-  private readonly HOST = 'https://eu.i.posthog.com';
-  private readonly UNKNOWN_USER_ID = 'UNKNOWN';
   private _curr_user_id: string | null = null;
   private _posthog_client: PostHog | null;
   private debug_logging: boolean;

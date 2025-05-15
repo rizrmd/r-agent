@@ -1,6 +1,6 @@
-import type { Page, Browser as PlaywrightBrowser } from "playwright";
+import type { Page, Browser as PlaywrightBrowser } from "patchright";
 
-import { chromium } from "playwright";
+import { chromium } from "patchright";
 import {
   BrowserContext,
   BrowserContextConfig,
@@ -64,7 +64,7 @@ export interface BrowserConfig {
 }
 
 const defaultBrowserConfig: BrowserConfig = {
-  headless: true,
+  headless: false,
   disable_security: true,
   extra_chromium_args: [],
   chrome_instance_path: undefined,
@@ -76,7 +76,7 @@ const defaultBrowserConfig: BrowserConfig = {
 
 export class Browser {
   config: BrowserConfig;
-  private playwright_browser: PlaywrightBrowser | null = null;
+  private patchright_browser: PlaywrightBrowser | null = null;
   private disable_security_args: string[] = [];
 
   constructor(config: Partial<BrowserConfig> = {}) {
@@ -98,18 +98,18 @@ export class Browser {
     return new BrowserContext(this, config);
   }
 
-  async get_playwright_browser(): Promise<PlaywrightBrowser> {
-    if (!this.playwright_browser) {
+  async get_patchright_browser(): Promise<PlaywrightBrowser> {
+    if (!this.patchright_browser) {
       return await this._init();
     }
-    return this.playwright_browser;
+    return this.patchright_browser;
   }
 
   @timeExecutionAsync("--init (browser)")
   private async _init(): Promise<PlaywrightBrowser> {
     const browser = await this._setup_browser();
-    this.playwright_browser = browser;
-    return this.playwright_browser;
+    this.patchright_browser = browser;
+    return this.patchright_browser;
   }
 
   private async _setup_cdp(): Promise<PlaywrightBrowser> {
@@ -223,15 +223,15 @@ export class Browser {
   async close(): Promise<void> {
     try {
       if (!this.config.force_keep_browser_alive) {
-        if (this.playwright_browser) {
-          await this.playwright_browser.close();
-          this.playwright_browser = null;
+        if (this.patchright_browser) {
+          await this.patchright_browser.close();
+          this.patchright_browser = null;
         }
       }
     } catch (error) {
       logger.debug(`Failed to close browser properly: ${error}`);
     } finally {
-      this.playwright_browser = null;
+      this.patchright_browser = null;
       global.gc?.();
     }
   }

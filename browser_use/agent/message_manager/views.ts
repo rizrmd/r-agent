@@ -26,11 +26,35 @@ export class ManagedMessage {
   }
 
   static fromJSON(data: any): ManagedMessage {
+    if (!data || typeof data.message !== 'object' || data.message === null) {
+      const errorMsg = `Invalid data or data.message structure in ManagedMessage.fromJSON. Received: ${JSON.stringify(data)}`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
     const messageData = data.message;
     let message: BaseMessage;
 
     // Determine the type, preferring _type but falling back to type
-    const messageType = messageData._type || messageData.type;
+    let messageType = messageData._type || messageData.type;
+
+    // If messageType is still undefined or empty, try to infer from role
+    if ((!messageType || String(messageType).trim() === '') && messageData.role) {
+      if (messageData.role === 'user') {
+        messageType = 'human';
+      } else if (messageData.role === 'assistant') {
+        messageType = 'ai';
+      } else if (messageData.role === 'system') {
+        messageType = 'system';
+      }
+      // Add other role mappings if necessary, e.g., 'tool' role to 'tool' type
+    }
+
+    if (typeof messageType !== 'string' || messageType.trim() === '') {
+      const errorMsg = `Unknown or empty message type in ManagedMessage.fromJSON. Type found: '${messageType}'. Original _type: '${messageData._type}', original type: '${messageData.type}', role: '${messageData.role}'. Full message object: ${JSON.stringify(messageData)}`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
 
     switch (messageType) {
       case 'ai':
@@ -46,12 +70,15 @@ export class ManagedMessage {
         message = ToolMessage.fromJSON(messageData);
         break;
       default:
-        throw new Error(`Unknown message type: ${messageType} (original _type: ${messageData._type}, original type: ${messageData.type})`);
+        const errorMsg = `Unrecognized message type: '${messageType}' in ManagedMessage.fromJSON. Original _type: '${messageData._type}', original type: '${messageData.type}'. Full message object: ${JSON.stringify(messageData)}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
     }
 
     return new ManagedMessage(
       message,
-      { tokens: data.metadata.tokens }
+      // Ensure metadata and tokens exist, providing a default if not
+      { tokens: data.metadata?.tokens || 0 }
     );
   }
 
