@@ -96,13 +96,14 @@ export class ChatGroqAI extends BaseChatModel {
 
         if (
           result &&
-          result.code === "tool_use_failed" &&
-          result.failed_generation &&
-          typeof result.failed_generation === "string"
+          result.error &&
+          result.error.code === "tool_use_failed" &&
+          result.error.failed_generation &&
+          typeof result.error.failed_generation === "string"
         ) {
           try {
             // Attempt to remove leading non-JSON characters like '>'
-            const cleanedFailureData = result.failed_generation.replace(
+            const cleanedFailureData = result.error.failed_generation.replace(
               /^[^\{]*/,
               ""
             );
@@ -111,10 +112,10 @@ export class ChatGroqAI extends BaseChatModel {
             console.error(
               "Failed to parse 'failed_generation' field:",
               parseError,
-              result.failed_generation
+              result.error.failed_generation
             );
             // Keep original failed_generation if parsing fails
-            parsedFailedGeneration = result.failed_generation;
+            parsedFailedGeneration = result.error.failed_generation;
           }
         }
       } catch (e) {
