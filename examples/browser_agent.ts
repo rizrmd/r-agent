@@ -20,10 +20,10 @@ const agent = new BrowserAgent(
   llm,
   {
     pageExtractionLLM: llm,
-    registerNewStepCallback(state, modelOutput, step) {
+    registerNewStepCallback(opt) {
       console.log(
-        `Step ${step}, State: ${JSON.stringify(
-          modelOutput.current_state,
+        `Step ${opt.step}, State: ${JSON.stringify(
+          opt.modelOutput.current_state,
           null,
           2
         )}`

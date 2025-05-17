@@ -28,10 +28,7 @@ function loadAgentState(filePath: string): AgentState | undefined {
     // Use the static fromSerializable method on AgentState
     // We need to pass the AgentOutputSchema (or the specific output model used by the agent)
     // for proper reconstruction of history items.
-    const agentState = AgentState.fromSerializable(
-      serializableState,
-      AgentOutputSchema
-    );
+    const agentState = AgentState.fromSerializable(serializableState);
     console.log(`Agent state loaded from ${filePath}`);
     return agentState;
   }
@@ -51,10 +48,10 @@ async function main(): Promise<void> {
     {
       pageExtractionLLM: llm,
       injectedAgentState: loadedState, // Inject loaded state if available
-      registerNewStepCallback(state, modelOutput, step) {
+      registerNewStepCallback(opt) {
         console.log(
-          `Step ${step}, State: ${JSON.stringify(
-            modelOutput.current_state,
+          `Step ${opt.step}, State: ${JSON.stringify(
+            opt.modelOutput.current_state,
             null,
             2
           )}`

@@ -67,11 +67,12 @@ class BrowserAgent<Context extends unknown = any> {
   private injectedBrowserContext: boolean;
   private browser?: Browser;
   private browserContext?: BrowserContext;
-  private registerNewStepCallback?: (
-    state: BrowserState,
-    modelOutput: AgentOutput,
-    step: number
-  ) => void | Promise<void>;
+  private registerNewStepCallback?: (opt: {
+    state: AgentState;
+    browser: BrowserState;
+    modelOutput: AgentOutput;
+    step: number;
+  }) => void | Promise<void>;
   private registerActionResultCallback?: (
     results: ActionResult[]
   ) => void | Promise<void>;
@@ -98,11 +99,12 @@ class BrowserAgent<Context extends unknown = any> {
       controller?: Controller<Context>;
       sensitiveData?: Record<string, string>;
       initialActions?: z.infer<typeof ActionModel>[]; // Use z.infer
-      registerNewStepCallback?: (
-        state: BrowserState,
-        modelOutput: AgentOutput,
-        step: number
-      ) => void | Promise<void>;
+      registerNewStepCallback?: (opt: {
+        state: AgentState;
+        browser: BrowserState;
+        modelOutput: AgentOutput;
+        step: number;
+      }) => void | Promise<void>;
       registerActionResultCallback?: (
         results: ActionResult[]
       ) => void | Promise<void>;
@@ -324,16 +326,22 @@ class BrowserAgent<Context extends unknown = any> {
       await this.raiseIfStoppedOrPaused();
 
       if (state) {
-        let previousBrainForPrompt: AgentOutput['current_state'] | undefined = undefined;
+        let previousBrainForPrompt: AgentOutput["current_state"] | undefined =
+          undefined;
         if (
           this.initialLoadedNSteps !== undefined &&
           this.state.n_steps === this.initialLoadedNSteps &&
           this.state.history.history.length > 0
         ) {
-          const lastHistoryItem = this.state.history.history[this.state.history.history.length - 1];
+          const lastHistoryItem =
+            this.state.history.history[this.state.history.history.length - 1];
           if (lastHistoryItem?.model_output?.current_state) {
             previousBrainForPrompt = lastHistoryItem.model_output.current_state;
-            logger.debug(`Resuming. Using previous brain for prompt: ${JSON.stringify(previousBrainForPrompt)}`);
+            logger.debug(
+              `Resuming. Using previous brain for prompt: ${JSON.stringify(
+                previousBrainForPrompt
+              )}`
+            );
           }
         }
 
@@ -393,11 +401,12 @@ class BrowserAgent<Context extends unknown = any> {
         this.state.n_steps += 1;
 
         if (this.registerNewStepCallback) {
-          await this.registerNewStepCallback(
-            state!,
-            modelOutput,
-            this.state.n_steps
-          );
+          await this.registerNewStepCallback({
+            state: this.state,
+            browser: state!,
+            modelOutput: modelOutput!,
+            step: this.state.n_steps
+          });
         }
 
         if (this.settings.save_conversation_path) {
@@ -743,8 +752,33 @@ class BrowserAgent<Context extends unknown = any> {
         },
         { includeRaw: false }
       );
-      const response = await validator.invoke(messages);
-      const parsed = response.parsed as z.infer<typeof ValidationResultSchema>;
+      const validationResult = await validator.invoke(messages);
+
+      if (
+        !validationResult.success ||
+        typeof validationResult.data === "undefined"
+      ) {
+        const errorDetail = validationResult.error
+          ? validationResult.error instanceof Error
+            ? validationResult.error.message
+            : String(validationResult.error)
+          : "Data is missing from validation response.";
+        logger.error(
+          `Validator invocation failed or data is missing: ${errorDetail}`
+        );
+        this.state.last_result = [
+          {
+            extracted_content: `Validation process could not be completed due to an issue with structuring the LLM's response. Details: ${errorDetail}`,
+            include_in_memory: true,
+            is_done: false,
+          },
+        ];
+        return false;
+      }
+
+      const parsed = validationResult.data as z.infer<
+        typeof ValidationResultSchema
+      >;
 
       const isValid = parsed.is_valid;
       if (!isValid) {

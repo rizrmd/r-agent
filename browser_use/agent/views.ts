@@ -1,33 +1,37 @@
-import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
-import * as path from 'path';
-import { z } from 'zod';
-import { BaseChatModel } from '../models/langchain';
-import { MessageManagerState, MessageHistory } from './message_manager/views';
-import { BrowserStateHistory } from '../browser/views';
+import { v4 as uuidv4 } from "uuid";
+import * as fs from "fs";
+import * as path from "path";
+import { z } from "zod";
+import { BaseChatModel } from "../models/langchain";
+import { MessageManagerState, MessageHistory } from "./message_manager/views";
+import { BrowserStateHistory } from "../browser/views";
 import {
   SerializableAgentState,
   SerializableMessageManagerState,
   SerializableMessageHistory,
   SerializableAgentHistoryList,
-  SerializableAgentHistoryItem
-} from './serializable_views';
+  SerializableAgentHistoryItem,
+} from "./serializable_views";
 import {
   DOMElementNode,
   DOMHistoryElement,
-  HistoryTreeProcessor
-} from '../dom/history_tree_processor/service';
-import { SelectorMap } from '../dom/views';
+  HistoryTreeProcessor,
+} from "../dom/history_tree_processor/service";
+import { SelectorMap } from "../dom/views";
 
-export type ToolCallingMethod = 'function_calling' | 'json_mode' | 'raw' | 'auto';
+export type ToolCallingMethod =
+  | "function_calling"
+  | "json_mode"
+  | "raw"
+  | "auto";
 
-export { ActionModel } from '../controller/registry/views';
+export { ActionModel } from "../controller/registry/views";
 
 export class AgentSettings {
   use_vision: boolean = true;
   use_vision_for_planner: boolean = false;
   save_conversation_path?: string = undefined;
-  save_conversation_path_encoding?: string = 'utf-8';
+  save_conversation_path_encoding?: string = "utf-8";
   max_failures: number = 3;
   retry_delay: number = 10;
   max_input_tokens: number = 128000;
@@ -38,19 +42,19 @@ export class AgentSettings {
   override_system_message?: string = undefined;
   extend_system_message?: string = undefined;
   include_attributes: string[] = [
-    'title',
-    'type',
-    'name',
-    'role',
-    'tabindex',
-    'aria-label',
-    'placeholder',
-    'value',
-    'alt',
-    'aria-expanded',
+    "title",
+    "type",
+    "name",
+    "role",
+    "tabindex",
+    "aria-label",
+    "placeholder",
+    "value",
+    "alt",
+    "aria-expanded",
   ];
   max_actions_per_step: number = 10;
-  tool_calling_method?: ToolCallingMethod = 'auto';
+  tool_calling_method?: ToolCallingMethod = "auto";
   page_extraction_llm?: BaseChatModel = undefined;
   planner_llm?: BaseChatModel = undefined;
   planner_interval: number = 1; // Run planner every N steps
@@ -79,7 +83,9 @@ export class AgentState {
 
   toSerializable(): SerializableAgentState {
     const serializableMessageHistory: SerializableMessageHistory = {
-      messages: this.message_manager_state.history.messages.map(m => m.toJSON()),
+      messages: this.message_manager_state.history.messages.map((m) =>
+        m.toJSON()
+      ),
       current_tokens: this.message_manager_state.history.current_tokens,
     };
 
@@ -92,7 +98,9 @@ export class AgentState {
       agent_id: this.agent_id,
       n_steps: this.n_steps,
       consecutive_failures: this.consecutive_failures,
-      last_result: this.last_result ? JSON.parse(JSON.stringify(this.last_result)) : undefined,
+      last_result: this.last_result
+        ? JSON.parse(JSON.stringify(this.last_result))
+        : undefined,
       history: this.history.toJSON(), // Leverages existing AgentHistoryList.toJSON()
       last_plan: this.last_plan,
       paused: this.paused,
@@ -101,22 +109,29 @@ export class AgentState {
     };
   }
 
-  static fromSerializable(data: SerializableAgentState, outputModel: z.ZodType<any>): AgentState {
+  static fromSerializable(data: SerializableAgentState): AgentState {
     const agentState = new AgentState(); // Initializes default history and message_manager_state
 
     agentState.agent_id = data.agent_id;
     agentState.n_steps = data.n_steps;
     agentState.consecutive_failures = data.consecutive_failures;
-    agentState.last_result = data.last_result ? JSON.parse(JSON.stringify(data.last_result)) : undefined;
+    agentState.last_result = data.last_result
+      ? JSON.parse(JSON.stringify(data.last_result))
+      : undefined;
     agentState.last_plan = data.last_plan;
     agentState.paused = data.paused;
     agentState.stopped = data.stopped;
 
     // Reconstruct MessageManagerState
-    agentState.message_manager_state = MessageManagerState.fromSerializable(data.message_manager_state);
-    
+    agentState.message_manager_state = MessageManagerState.fromSerializable(
+      data.message_manager_state
+    );
+
     // Reconstruct AgentHistoryList
-    agentState.history = AgentHistoryList.fromSerializable(data.history, outputModel);
+    agentState.history = AgentHistoryList.fromSerializable(
+      data.history,
+      AgentOutputSchema
+    );
 
     return agentState;
   }
@@ -142,7 +157,7 @@ export const ActionResultSchema = z.object({
   extracted_content: z.string().optional(),
   error: z.string().optional(),
   include_in_memory: z.boolean().optional(),
-})
+});
 export type ActionResult = z.infer<typeof ActionResultSchema>;
 
 export class StepMetadata {
@@ -168,20 +183,22 @@ export class StepMetadata {
   }
 }
 
-
-export const AgentBrainSchema = z.object({
-  evaluation_previous_goal: z.string(),
-  memory: z.string(),
-  next_goal: z.string(),
-}, {
-  description: 'Current state of the agent'
-});
+export const AgentBrainSchema = z.object(
+  {
+    evaluation_previous_goal: z.string(),
+    memory: z.string(),
+    next_goal: z.string(),
+  },
+  {
+    description: "Current state of the agent",
+  }
+);
 
 export type AgentBrain = z.infer<typeof AgentBrainSchema>;
 
 export const AgentOutputSchema = z.object({
   current_state: AgentBrainSchema,
-  action: z.array(z.record(z.record(z.any())))
+  action: z.array(z.record(z.record(z.any()))),
 });
 
 export type AgentOutput = z.infer<typeof AgentOutputSchema>;
@@ -215,8 +232,11 @@ export class AgentHistory {
       const index = actionValue?.index;
       if (index != null && index in selector_map) {
         const el = selector_map[index];
-        if (el) { // Added check for undefined el
-          elements.push(HistoryTreeProcessor.convert_dom_element_to_history_element(el));
+        if (el) {
+          // Added check for undefined el
+          elements.push(
+            HistoryTreeProcessor.convert_dom_element_to_history_element(el)
+          );
         } else {
           elements.push(null);
         }
@@ -233,7 +253,9 @@ export class AgentHistory {
     let model_output_dump = null;
 
     if (this.model_output) {
-      const action_dump = this.model_output.action.map(action => JSON.parse(JSON.stringify(action)));
+      const action_dump = this.model_output.action.map((action) =>
+        JSON.parse(JSON.stringify(action))
+      );
 
       model_output_dump = {
         current_state: this.model_output.current_state,
@@ -243,24 +265,32 @@ export class AgentHistory {
 
     return {
       model_output: model_output_dump,
-      result: this.result.map(r => r),
+      result: this.result.map((r) => r),
       state: this.state.toJSON(),
       metadata: this.metadata,
     };
   }
 
-  static fromSerializable(data: SerializableAgentHistoryItem, outputModel: z.ZodType<any>): AgentHistory {
+  static fromSerializable(
+    data: SerializableAgentHistoryItem,
+    outputModel: z.ZodType<any>
+  ): AgentHistory {
     let model_output_parsed: AgentOutput | undefined = undefined;
     if (data.model_output) {
       // Ensure model_output is an object before parsing. It might be null.
-      if (typeof data.model_output === 'object' && data.model_output !== null) {
+      if (typeof data.model_output === "object" && data.model_output !== null) {
         try {
           // Assuming AgentOutputSchema is the correct schema for model_output.current_state and model_output.action
-          model_output_parsed = outputModel.parse(data.model_output) as AgentOutput;
+          model_output_parsed = outputModel.parse(
+            data.model_output
+          ) as AgentOutput;
         } catch (e) {
-          console.error("Error parsing model_output during AgentHistory.fromSerializable:", e);
+          console.error(
+            "Error parsing model_output during AgentHistory.fromSerializable:",
+            e
+          );
           // Decide how to handle parsing errors: throw, log, or set to undefined
-          model_output_parsed = undefined; 
+          model_output_parsed = undefined;
         }
       } else {
         // if data.model_output is not a suitable object, treat as undefined or handle as error
@@ -310,12 +340,14 @@ export class AgentHistoryList {
 
   input_token_usage(): number[] {
     return this.history
-      .filter(h => h.metadata)
-      .map(h => h.metadata!.input_tokens);
+      .filter((h) => h.metadata)
+      .map((h) => h.metadata!.input_tokens);
   }
 
   toString(): string {
-    return `AgentHistoryList(all_results=${JSON.stringify(this.action_results())}, all_model_outputs=${JSON.stringify(this.model_actions())})`;
+    return `AgentHistoryList(all_results=${JSON.stringify(
+      this.action_results()
+    )}, all_model_outputs=${JSON.stringify(this.model_actions())})`;
   }
 
   save_to_file(filepath: string): void {
@@ -326,7 +358,7 @@ export class AgentHistoryList {
       }
 
       const data = this.toJSON();
-      fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf-8');
+      fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf-8");
     } catch (e) {
       throw e;
     }
@@ -334,26 +366,46 @@ export class AgentHistoryList {
 
   toJSON(): Record<string, any> {
     return {
-      history: this.history.map(h => h.toJSON()),
+      history: this.history.map((h) => h.toJSON()),
     };
   }
 
-  static load_from_file(filepath: string, outputModel: z.ZodType<any>): AgentHistoryList {
-    const fileContent = fs.readFileSync(filepath, 'utf-8');
+  static load_from_file(
+    filepath: string,
+    outputModel: z.ZodType<any>
+  ): AgentHistoryList {
+    const fileContent = fs.readFileSync(filepath, "utf-8");
     const data = JSON.parse(fileContent) as SerializableAgentHistoryList; // Cast to ensure structure
     return AgentHistoryList.fromSerializable(data, outputModel);
   }
 
-  static fromSerializable(data: SerializableAgentHistoryList, outputModel: z.ZodType<any>): AgentHistoryList {
-    const historyItems = data.history.map((h_data: SerializableAgentHistoryItem) => AgentHistory.fromSerializable(h_data, outputModel));
+  static fromSerializable(
+    data: SerializableAgentHistoryList,
+    outputModel: z.ZodType<any>
+  ): AgentHistoryList {
+    const historyItems = data.history.map(
+      (h_data: SerializableAgentHistoryItem) =>
+        AgentHistory.fromSerializable(h_data, outputModel)
+    );
     return new AgentHistoryList({ history: historyItems });
   }
 
   last_action(): Record<string, any> | null {
-    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
-    if (lastHistoryItem && lastHistoryItem.model_output && lastHistoryItem.model_output.action.length > 0) {
-      const lastAction = lastHistoryItem.model_output.action[lastHistoryItem.model_output.action.length - 1];
-      if (lastAction) { // Added check for undefined lastAction
+    const lastHistoryItem =
+      this.history.length > 0
+        ? this.history[this.history.length - 1]
+        : undefined;
+    if (
+      lastHistoryItem &&
+      lastHistoryItem.model_output &&
+      lastHistoryItem.model_output.action.length > 0
+    ) {
+      const lastAction =
+        lastHistoryItem.model_output.action[
+          lastHistoryItem.model_output.action.length - 1
+        ];
+      if (lastAction) {
+        // Added check for undefined lastAction
         return JSON.parse(JSON.stringify(lastAction));
       }
     }
@@ -364,14 +416,19 @@ export class AgentHistoryList {
     const errors: (string | null)[] = [];
 
     for (const h of this.history) {
-      if (h && h.result) { // Added check for undefined h and h.result
+      if (h && h.result) {
+        // Added check for undefined h and h.result
         const step_errors = h.result
-          .filter(r => r && r.error) // Added check for undefined r
-          .map(r => r.error) // Removed non-null assertion
-          .filter(e => e !== undefined); // Filter out undefined errors
+          .filter((r) => r && r.error) // Added check for undefined r
+          .map((r) => r.error) // Removed non-null assertion
+          .filter((e) => e !== undefined); // Filter out undefined errors
 
         // Each step can have only one error
-        errors.push(step_errors.length > 0 && step_errors[0] !== undefined ? step_errors[0] : null); // Added check for undefined step_errors[0]
+        errors.push(
+          step_errors.length > 0 && step_errors[0] !== undefined
+            ? step_errors[0]
+            : null
+        ); // Added check for undefined step_errors[0]
       } else {
         errors.push(null);
       }
@@ -381,14 +438,19 @@ export class AgentHistoryList {
   }
 
   final_result(): string | null {
-    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
+    const lastHistoryItem =
+      this.history.length > 0
+        ? this.history[this.history.length - 1]
+        : undefined;
     if (
       lastHistoryItem &&
       lastHistoryItem.result && // Added check for undefined result
       lastHistoryItem.result.length > 0
     ) {
-      const lastResultItem = lastHistoryItem.result[lastHistoryItem.result.length - 1];
-      if (lastResultItem && lastResultItem.extracted_content) { // Added check for undefined lastResultItem and extracted_content
+      const lastResultItem =
+        lastHistoryItem.result[lastHistoryItem.result.length - 1];
+      if (lastResultItem && lastResultItem.extracted_content) {
+        // Added check for undefined lastResultItem and extracted_content
         return lastResultItem.extracted_content;
       }
     }
@@ -396,19 +458,38 @@ export class AgentHistoryList {
   }
 
   is_done(): boolean {
-    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
-    if (lastHistoryItem && lastHistoryItem.result && lastHistoryItem.result.length > 0) { // Added check for undefined result
-      const lastResultItem = lastHistoryItem.result[lastHistoryItem.result.length - 1];
+    const lastHistoryItem =
+      this.history.length > 0
+        ? this.history[this.history.length - 1]
+        : undefined;
+    if (
+      lastHistoryItem &&
+      lastHistoryItem.result &&
+      lastHistoryItem.result.length > 0
+    ) {
+      // Added check for undefined result
+      const lastResultItem =
+        lastHistoryItem.result[lastHistoryItem.result.length - 1];
       return !!(lastResultItem && lastResultItem.is_done); // Added check for undefined lastResultItem
     }
     return false;
   }
 
   is_successful(): boolean | null {
-    const lastHistoryItem = this.history.length > 0 ? this.history[this.history.length - 1] : undefined;
-    if (lastHistoryItem && lastHistoryItem.result && lastHistoryItem.result.length > 0) { // Added check for undefined result
-      const lastResultItem = lastHistoryItem.result[lastHistoryItem.result.length - 1];
-      if (lastResultItem && lastResultItem.is_done) { // Added check for undefined lastResultItem
+    const lastHistoryItem =
+      this.history.length > 0
+        ? this.history[this.history.length - 1]
+        : undefined;
+    if (
+      lastHistoryItem &&
+      lastHistoryItem.result &&
+      lastHistoryItem.result.length > 0
+    ) {
+      // Added check for undefined result
+      const lastResultItem =
+        lastHistoryItem.result[lastHistoryItem.result.length - 1];
+      if (lastResultItem && lastResultItem.is_done) {
+        // Added check for undefined lastResultItem
         return lastResultItem.success || false;
       }
     }
@@ -416,24 +497,26 @@ export class AgentHistoryList {
   }
 
   has_errors(): boolean {
-    return this.errors().some(error => error != null);
+    return this.errors().some((error) => error != null);
   }
 
   urls(): (string | null)[] {
-    return this.history.map(h => h.state.url || null);
+    return this.history.map((h) => h.state.url || null);
   }
 
   screenshots(): (string | null)[] {
-    return this.history.map(h => h.state.screenshot || null);
+    return this.history.map((h) => h.state.screenshot || null);
   }
 
   action_names(): string[] {
     const action_names: string[] = [];
 
     for (const action of this.model_actions()) {
-      if (action) { // Added check for undefined action
+      if (action) {
+        // Added check for undefined action
         const actions = Object.keys(action);
-        if (actions.length > 0 && actions[0]) { // Added check for undefined actions[0]
+        if (actions.length > 0 && actions[0]) {
+          // Added check for undefined actions[0]
           action_names.push(actions[0]);
         }
       }
@@ -444,14 +527,14 @@ export class AgentHistoryList {
 
   model_thoughts(): AgentBrain[] {
     return this.history
-      .filter(h => h.model_output)
-      .map(h => h.model_output!.current_state);
+      .filter((h) => h.model_output)
+      .map((h) => h.model_output!.current_state);
   }
 
   model_outputs(): AgentOutput[] {
     return this.history
-      .filter(h => h.model_output)
-      .map(h => h.model_output!);
+      .filter((h) => h.model_output)
+      .map((h) => h.model_output!);
   }
 
   model_actions(): Record<string, any>[] {
@@ -461,7 +544,9 @@ export class AgentHistoryList {
       if (h.model_output) {
         for (let i = 0; i < h.model_output.action.length; i++) {
           const action = h.model_output.action[i];
-          const interacted_element = h.state.interacted_element ? h.state.interacted_element[i] : null;
+          const interacted_element = h.state.interacted_element
+            ? h.state.interacted_element[i]
+            : null;
 
           const output = JSON.parse(JSON.stringify(action));
           output.interacted_element = interacted_element;
@@ -477,7 +562,7 @@ export class AgentHistoryList {
     const results: ActionResult[] = [];
 
     for (const h of this.history) {
-      results.push(...h.result.filter(r => r));
+      results.push(...h.result.filter((r) => r));
     }
 
     return results;
@@ -487,9 +572,10 @@ export class AgentHistoryList {
     const content: string[] = [];
 
     for (const h of this.history) {
-      content.push(...h.result
-        .filter(r => r.extracted_content)
-        .map(r => r.extracted_content!)
+      content.push(
+        ...h.result
+          .filter((r) => r.extracted_content)
+          .map((r) => r.extracted_content!)
       );
     }
 
@@ -521,12 +607,13 @@ export class AgentHistoryList {
 }
 
 export class AgentError {
-  static VALIDATION_ERROR = 'Invalid model output format. Please follow the correct schema.';
-  static RATE_LIMIT_ERROR = 'Rate limit reached. Waiting before retry.';
-  static NO_VALID_ACTION = 'No valid action found';
-  static MAX_FAILURES_REACHED = 'Maximum number of failures reached';
-  static AGENT_STOPPED = 'Agent was stopped';
-  static AGENT_PAUSED = 'Agent was paused';
+  static VALIDATION_ERROR =
+    "Invalid model output format. Please follow the correct schema.";
+  static RATE_LIMIT_ERROR = "Rate limit reached. Waiting before retry.";
+  static NO_VALID_ACTION = "No valid action found";
+  static MAX_FAILURES_REACHED = "Maximum number of failures reached";
+  static AGENT_STOPPED = "Agent was stopped";
+  static AGENT_PAUSED = "Agent was paused";
 
   message: string;
   error: Error;
@@ -542,9 +629,9 @@ export class AgentError {
 
   static fromError(error: Error): AgentError {
     if (error instanceof Error) {
-      if (error.message.includes('validation')) {
+      if (error.message.includes("validation")) {
         return new AgentError(AgentError.VALIDATION_ERROR, error);
-      } else if (error.name === 'RateLimitError') {
+      } else if (error.name === "RateLimitError") {
         return new AgentError(AgentError.RATE_LIMIT_ERROR, error);
       }
     }
