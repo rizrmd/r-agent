@@ -1,7 +1,7 @@
-export type LogLevel = 'debug' | 'info';
+export type LogLevel = "debug" | "info" | "error";
 
 export class Logger {
-  private static globalLevel: LogLevel = 'info';
+  private static globalLevel: LogLevel = "info";
   private name: string;
   private level: LogLevel; // Changed to LogLevel type
 
@@ -13,9 +13,10 @@ export class Logger {
     this.level = level || Logger.globalLevel;
   }
   isDebugEnabled(): boolean {
-    return this.level === 'debug';
+    return this.level === "debug";
   }
   log(...args: any[]) {
+    if (this.level === "error") return;
     console.log(`[${this.name}]`, ...args);
   }
   debug(...args: any[]) {
@@ -31,6 +32,7 @@ export class Logger {
     console.trace(`[${this.name}]`, ...args);
   }
   info(...args: any[]) {
+    if (this.level === "error") return;
     console.info(`[${this.name}]`, ...args);
   }
   warn(...args: any[]) {
@@ -48,12 +50,12 @@ export class Logger {
   }
 }
 
-const logger = new Logger('utils');
+const logger = new Logger("utils");
 
 /**
  * Decorator for timing asynchronous function execution
  */
-export function timeExecutionAsync(additionalText: string = '') {
+export function timeExecutionAsync(additionalText: string = "") {
   return function (
     target: any,
     propertyKey: string,
@@ -65,13 +67,15 @@ export function timeExecutionAsync(additionalText: string = '') {
       const startTime = Date.now();
       const result = await originalMethod.apply(this, args);
       const executionTime = (Date.now() - startTime) / 1000;
-      logger.debug(`${additionalText} Execution time: ${executionTime.toFixed(2)} seconds`);
+      logger.debug(
+        `${additionalText} Execution time: ${executionTime.toFixed(2)} seconds`
+      );
       return result;
     };
   };
 }
 
-export function timeExecutionSync(additionalText: string = '') {
+export function timeExecutionSync(additionalText: string = "") {
   return function (
     _target: any,
     _propertyKey: string,
@@ -83,17 +87,20 @@ export function timeExecutionSync(additionalText: string = '') {
       const startTime = Date.now();
       const result = originalMethod.apply(this, args);
       const executionTime = (Date.now() - startTime) / 1000;
-      logger.debug(`${additionalText} Execution time: ${executionTime.toFixed(2)} seconds`);
+      logger.debug(
+        `${additionalText} Execution time: ${executionTime.toFixed(2)} seconds`
+      );
       return result;
     };
   };
 }
 
-
 /**
  * Singleton pattern implementation
  */
-export function singleton<T extends new (...args: any[]) => any>(constructor: T) {
+export function singleton<T extends new (...args: any[]) => any>(
+  constructor: T
+) {
   let instance: InstanceType<T> | null = null;
 
   return class extends constructor {

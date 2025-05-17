@@ -70,6 +70,30 @@ export class Controller<Context> {
     }
 
     // Basic Navigation Actions
+    // this.registry.action({
+    //   name: "search_google",
+    //   description:
+    //     "Search the query in Google in the current tab, the query should be a search query like humans search in Google, concrete and not vague or super long. More the single most important items.",
+    //   paramsSchema: SearchGoogleAction,
+    //   func: async (
+    //     params: z.infer<typeof SearchGoogleAction>,
+    //     ctx: ActionRunContext
+    //   ) => {
+    //     const page = await ctx.browser.get_current_page();
+    //     await page.goto(
+    //       `https://www.google.com/search?q=${params.query}&udm=14`
+    //     );
+    //     await page.waitForLoadState();
+    //     const msg = `🔍  Searched for "${params.query}" in Google`;
+    //     logger.info(msg);
+    //     return {
+    //       extracted_content: msg,
+    //       include_in_memory: true,
+    //     };
+    //   },
+    // });
+
+    // Basic Navigation Actions
     this.registry.action({
       name: "search_google",
       description:
@@ -81,7 +105,7 @@ export class Controller<Context> {
       ) => {
         const page = await ctx.browser.get_current_page();
         await page.goto(
-          `https://www.google.com/search?q=${params.query}&udm=14`
+          `https://duckduckgo.com/?q=!g+${params.query}&kp=-1&kl=us-en`
         );
         await page.waitForLoadState();
         const msg = `🔍  Searched for "${params.query}" in Google`;
