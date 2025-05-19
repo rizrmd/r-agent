@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync } from "fs";
+import { join } from "path";
 import {
   BaseChatModel,
   BaseMessage,
@@ -6,7 +8,7 @@ import {
   RequestParams,
   StructuredTool,
 } from "./langchain";
-import { cleanStringField, parseJsonFromResponseText } from "./response_parser";
+import { cleanStringField } from "./response_parser";
 
 export class ChatOpenRouterAI extends BaseChatModel {
   timeout?: number;
@@ -66,54 +68,138 @@ export class ChatOpenRouterAI extends BaseChatModel {
     const body = JSON.stringify({
       ...params,
       model: this.model_name,
-    });
+      provider: {
+        sort: "throughput",
+      },
+    } as RequestParams);
     const response = await fetch(url, {
       method: "post",
       headers,
       body,
     });
 
+    const logDir = join(process.cwd(), "logs");
+    const dirExists = existsSync(logDir);
+    if (!dirExists) {
+      mkdirSync(logDir, { recursive: true });
+    }
+    let input: any = body;
+    try {
+      input = JSON.parse(body);
+    } catch (e) {}
+
     if (!response.ok) {
       const errorBody = await response.text();
+
+      let result: any = errorBody;
+      let parsedFailedGeneration: any = null;
+
+      try {
+        result = JSON.parse(errorBody);
+
+        if (
+          result &&
+          result.error &&
+          result.error.code === "tool_use_failed" &&
+          result.error.failed_generation &&
+          typeof result.error.failed_generation === "string"
+        ) {
+          try {
+            // Attempt to remove leading non-JSON characters like '>'
+            const cleanedFailureData = result.error.failed_generation.replace(
+              /^[^\{]*/,
+              ""
+            );
+            parsedFailedGeneration = JSON.parse(cleanedFailureData);
+          } catch (parseError) {
+            console.error(
+              "Failed to parse 'failed_generation' field:",
+              parseError,
+              result.error.failed_generation
+            );
+            // Keep original failed_generation if parsing fails
+            parsedFailedGeneration = result.error.failed_generation;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse error response or input as JSON", e);
+      }
+
+      const logData: any = {
+        status: response.status,
+        body: input,
+        response: result,
+      };
+
+      if (parsedFailedGeneration) {
+        logData.parsed_failed_generation = parsedFailedGeneration;
+      }
+
+      Bun.file(
+        join(process.cwd(), "logs", Date.now().toString()) + ".error.json"
+      ).write(JSON.stringify(logData, null, 2));
+
       console.error(
-        `OpenRouter API Error: ${response.status} ${response.statusText}`,
-        errorBody
+        `Groq API Error: ${response.status} ${response.statusText}`,
+        errorBody,
+        parsedFailedGeneration
+          ? `Parsed failed_generation: ${JSON.stringify(
+              parsedFailedGeneration
+            )}`
+          : ""
       );
       throw new Error(
-        `OpenRouter API request failed with status ${response.status}: ${errorBody}`
+        `Groq API request failed with status ${response.status}: ${errorBody}`
       );
     }
 
-    const responseText = await response.text();
-    const responseData = parseJsonFromResponseText(responseText);
+    const responseData = await response.json();
 
+    const logData: any = {
+      status: response.status,
+      body: input,
+      response: responseData,
+    };
+    Bun.file(
+      join(process.cwd(), "logs", Date.now().toString()) + ".log.json"
+    ).write(JSON.stringify(logData, null, 2));
     if (!responseData.choices || responseData.choices.length === 0) {
-      console.error("OpenRouter API Error: No choices returned", responseData);
-      throw new Error("OpenRouter API request returned no choices.");
+      console.error("Groq API Error: No choices returned", responseData);
+      throw new Error("Groq API request returned no choices.");
     }
-
     const message = responseData.choices[0].message;
 
     // Clean message.content
     if (message.content) {
-      if (typeof message.content === 'string') {
+      if (typeof message.content === "string") {
         message.content = cleanStringField(message.content);
       } else if (Array.isArray(message.content)) {
-        // Handle array of content blocks (e.g., [{type: "text", text: "..."}, ...])
-        message.content = message.content.map((block: { type: string; text?: string; [key: string]: any; }) => {
-          if (block && block.type === 'text' && typeof block.text === 'string') {
-            return { ...block, text: cleanStringField(block.text) };
+        message.content = message.content.map(
+          (block: { type: string; text?: string; [key: string]: any }) => {
+            if (
+              block &&
+              block.type === "text" &&
+              typeof block.text === "string"
+            ) {
+              return { ...block, text: cleanStringField(block.text) };
+            }
+            return block;
           }
-          return block;
-        });
+        );
       }
     }
 
     // Clean message.tool_calls arguments if present
     if (message.tool_calls && Array.isArray(message.tool_calls)) {
       for (const toolCall of message.tool_calls) {
-        if (toolCall.function && toolCall.function.arguments && typeof toolCall.function.arguments === 'string') {
-          toolCall.function.arguments = cleanStringField(toolCall.function.arguments);
+        if (
+          toolCall.function &&
+          toolCall.function.arguments &&
+          typeof toolCall.function.arguments === "string"
+        ) {
+          toolCall.function.arguments = cleanStringField(
+            toolCall.function.arguments
+          );
         }
       }
     }

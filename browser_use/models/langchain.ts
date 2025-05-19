@@ -107,6 +107,9 @@ export interface RequestParams {
   tools?: any[];
   tool_choice?: any;
   messages: any[];
+  provider?: {
+    sort: "throughput" | "latency" | "cost";
+  };
 }
 
 export function formatToolCall(
