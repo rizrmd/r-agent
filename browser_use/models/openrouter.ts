@@ -70,8 +70,9 @@ export class ChatOpenRouterAI extends BaseChatModel {
       model: this.model_name,
       provider: {
         sort: "throughput",
+        ignore: ["Cerebras", "Groq"],
       },
-    } as RequestParams);
+    } satisfies RequestParams);
     const response = await fetch(url, {
       method: "post",
       headers,

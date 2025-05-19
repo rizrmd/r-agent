@@ -106,9 +106,11 @@ export class ToolMessage extends BaseMessage {
 export interface RequestParams {
   tools?: any[];
   tool_choice?: any;
+  model?: string;
   messages: any[];
   provider?: {
-    sort: "throughput" | "latency" | "cost";
+    sort?: "throughput" | "latency" | "cost";
+    ignore?: string[];
   };
 }
 
