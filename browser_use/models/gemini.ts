@@ -59,7 +59,7 @@ export class ChatGeminiAI extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tool?: StructuredTool
+    tools?: StructuredTool | StructuredTool[]
   ): RequestParams {
     const geminiContents: any[] = [];
     const systemInstructions: string[] = [];
@@ -139,8 +139,9 @@ export class ChatGeminiAI extends BaseChatModel {
       };
     }
 
-    if (tool) {
-      const langchainFormattedTools = formatTools([tool]);
+    if (tools) {
+      const toolArray = Array.isArray(tools) ? tools : [tools];
+      const langchainFormattedTools = formatTools(toolArray);
       if (
         langchainFormattedTools.tools &&
         langchainFormattedTools.tools.length > 0

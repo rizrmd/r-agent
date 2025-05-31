@@ -746,7 +746,7 @@ class BrowserAgent<Context extends unknown = any> {
         is_valid: z.boolean(),
         reason: z.string(),
       });
-      const validator = this.llm.withStructuredOutput(
+      const validator = this.llm.withTools(
         {
           schema: ValidationResultSchema,
         },

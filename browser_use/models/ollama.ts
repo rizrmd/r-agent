@@ -78,7 +78,7 @@ export class ChatOllama extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tool: StructuredTool
+    tools?: StructuredTool | StructuredTool[]
   ): RequestParams {
     const messages: any[] = [];
     for (const m of rawMessages) {
@@ -127,12 +127,16 @@ export class ChatOllama extends BaseChatModel {
         messages.push(newMsg);
       }
     }
-    let formatedTools: Record<string, any> = {};
-    if (tool) {
-      formatedTools = formatTools([tool]);
-      formatedTools.tool_choice = undefined;
+
+    // Handle both single tool and multiple tools
+    let formattedTools: Record<string, any> = {};
+    if (tools) {
+      const toolArray = Array.isArray(tools) ? tools : [tools];
+      formattedTools = formatTools(toolArray);
+      formattedTools.tool_choice = undefined;
     }
-    return { messages, ...formatedTools };
+
+    return { messages, ...formattedTools };
   }
 
   async request(params: RequestParams): Promise<OpenAIMessage> {

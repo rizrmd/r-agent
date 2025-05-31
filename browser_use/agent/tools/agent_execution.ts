@@ -82,7 +82,7 @@ export async function executeGetNextAction(
       );
     }
   } else if (toolCallingMethod == null) {
-    const structuredLlm = llm.withStructuredOutput(
+    const structuredLlm = llm.withTools(
       createAgentOutputToolInternal(agentOutputSchema),
       { includeRaw: true }
     );
@@ -98,7 +98,7 @@ export async function executeGetNextAction(
     return parsed as AgentOutput;
   } else {
     // function_calling or json_mode
-    const structuredLlm = llm.withStructuredOutput(
+    const structuredLlm = llm.withTools(
       createAgentOutputToolInternal(agentOutputSchema),
       {
         includeRaw: true,

@@ -20,7 +20,7 @@ export class ChatOpenAI extends BaseChatModel {
         this.baseUrl = params.baseUrl || 'https://api.openai.com/v1';
     }
 
-    formatMessages(rawMessages: BaseMessage[], tool: StructuredTool): RequestParams {
+    formatMessages(rawMessages: BaseMessage[], tools?: StructuredTool | StructuredTool[]): RequestParams {
         const messages: any[] = [];
         for (const m of rawMessages) {
             const newMsg: Record<string, any> = {
@@ -45,7 +45,15 @@ export class ChatOpenAI extends BaseChatModel {
             }
             messages.push(newMsg);
         }
-        return {messages, ...(tool ? formatTools([tool]):{})};
+
+        // Handle both single tool and multiple tools
+        let formattedTools = {};
+        if (tools) {
+            const toolArray = Array.isArray(tools) ? tools : [tools];
+            formattedTools = formatTools(toolArray);
+        }
+
+        return { messages, ...formattedTools };
     }
 
     async request(params: RequestParams): Promise<OpenAIMessage> {

@@ -126,7 +126,7 @@ const llm = new ChatGroqAI({
 });
 
 // Create a structured output handler
-const structuredLLM = llm.withStructuredOutput(assistantTool, {
+const structuredLLM = llm.withTools(assistantTool, {
   method: "auto",
 });
 

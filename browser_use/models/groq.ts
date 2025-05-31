@@ -33,7 +33,7 @@ export class ChatGroqAI extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tool: StructuredTool
+    tools?: StructuredTool | StructuredTool[]
   ): RequestParams {
     const messages: any[] = [];
     for (const m of rawMessages) {
@@ -56,7 +56,15 @@ export class ChatGroqAI extends BaseChatModel {
       }
       messages.push(newMsg);
     }
-    return { messages, ...(tool ? formatTools([tool]) : {}) };
+
+    // Handle both single tool and multiple tools
+    let formattedTools = {};
+    if (tools) {
+      const toolArray = Array.isArray(tools) ? tools : [tools];
+      formattedTools = formatTools(toolArray);
+    }
+
+    return { messages, ...formattedTools };
   }
 
   async request(params: RequestParams): Promise<OpenAIMessage> {
