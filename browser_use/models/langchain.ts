@@ -87,17 +87,23 @@ export class StructuredTool {
   name?: string;
   description?: string;
   schema: z.ZodType<any>;
+  action?: (data: any) => Promise<any> | any;
 
   constructor(data: {
     name?: string;
     description?: string;
     schema: z.ZodType<any>;
+    action?: (data: any) => Promise<any> | any;
   }) {
     // Added constructor
     this.name = data.name;
     this.description = data.description;
     this.schema = data.schema;
+    this.action = data.action;
   }
+  
+
+  
 }
 
 export class BaseMessage implements Message {
@@ -225,6 +231,7 @@ type StructuredToolInput = {
   error?: Error | z.ZodError<any>;
   raw: OpenAIMessage;
   data?: z.infer<StructuredTool["schema"]>;
+  actionResult?: any;
 };
 
 type MultipleStructuredToolInput = {
@@ -237,6 +244,7 @@ type MultipleStructuredToolInput = {
     data: any;
     success: boolean;
     error?: Error | z.ZodError<any>;
+    actionResult?: any;
   }>;
 };
 
@@ -343,19 +351,19 @@ export class BaseChatModel {
 
         if (actualToolCalls || options?.method === "function_calling") {
           if (isMultipleTools) {
-            return self.handleMultipleToolCalls(
+            return (await self.handleMultipleToolCalls(
               actualToolCalls,
               toolArray,
               message,
               options
-            ) as T;
+            )) as T;
           } else {
-            return self.handleSingleToolCall(
+            return (await self.handleSingleToolCall(
               actualToolCalls?.[0],
               toolArray[0]!,
               message,
               options
-            ) as T;
+            )) as T;
           }
         }
 
@@ -365,11 +373,11 @@ export class BaseChatModel {
             // For multiple tools, try to parse as array or single object
             try {
               const parsedContent = JSON.parse(message.content);
-              return self.validateMultipleToolsContent(
+              return (await self.validateMultipleToolsContent(
                 parsedContent,
                 toolArray,
                 message
-              ) as T;
+              )) as T;
             } catch (e: any) {
               console.error(
                 "JSON.parse failed for message content. Error:",
@@ -382,13 +390,13 @@ export class BaseChatModel {
               return { success: false, error: e, raw: message } as T;
             }
           } else {
-            return self.handleSingleToolCall(
+            return (await self.handleSingleToolCall(
               null,
               toolArray[0]!,
               message,
               options,
               message.content
-            ) as T;
+            )) as T;
           }
         } else {
           const errorDetail = isMultipleTools
@@ -409,13 +417,13 @@ export class BaseChatModel {
     };
   }
 
-  private handleSingleToolCall(
+  private async handleSingleToolCall(
     toolCall: any,
     tool: StructuredTool,
     message: OpenAIMessage,
     options: { includeRaw?: boolean; method?: ToolCallingMethod },
     contentString?: string
-  ): StructuredToolInput {
+  ): Promise<StructuredToolInput> {
     if (toolCall) {
       if (
         !toolCall ||
@@ -440,9 +448,29 @@ export class BaseChatModel {
         const parsedArgs = JSON.parse(argsString);
         const validationResult = tool.schema.safeParse(parsedArgs);
         if (validationResult.success) {
+          let actionResult: any = undefined;
+          
+          // Execute the action if it exists
+          if (tool.action) {
+            try {
+              actionResult = await tool.action(validationResult.data);
+            } catch (actionError: any) {
+              console.error(
+                "Action execution failed for tool call. Error:",
+                actionError.message
+              );
+              return {
+                success: false,
+                error: actionError,
+                raw: message,
+              };
+            }
+          }
+          
           return {
             success: true,
             data: validationResult.data,
+            actionResult,
             raw: message,
           };
         } else {
@@ -474,9 +502,29 @@ export class BaseChatModel {
         const parsedContent = JSON.parse(contentString);
         const validationResult = tool.schema.safeParse(parsedContent);
         if (validationResult.success) {
+          let actionResult: any = undefined;
+          
+          // Execute the action if it exists
+          if (tool.action) {
+            try {
+              actionResult = await tool.action(validationResult.data);
+            } catch (actionError: any) {
+              console.error(
+                "Action execution failed for content parsing. Error:",
+                actionError.message
+              );
+              return {
+                success: false,
+                error: actionError,
+                raw: message,
+              };
+            }
+          }
+          
           return {
             success: true,
             data: validationResult.data,
+            actionResult,
             raw: message,
           };
         } else {
@@ -518,12 +566,12 @@ export class BaseChatModel {
     }
   }
 
-  private handleMultipleToolCalls(
+  private async handleMultipleToolCalls(
     actualToolCalls: any[],
     tools: StructuredTool[],
     message: OpenAIMessage,
     options: { includeRaw?: boolean; method?: ToolCallingMethod }
-  ): MultipleStructuredToolInput {
+  ): Promise<MultipleStructuredToolInput> {
     if (
       !actualToolCalls ||
       !Array.isArray(actualToolCalls) ||
@@ -549,6 +597,7 @@ export class BaseChatModel {
       data: any;
       success: boolean;
       error?: Error | z.ZodError<any>;
+      actionResult?: any;
     }> = [];
 
     let overallSuccess = true;
@@ -570,6 +619,7 @@ export class BaseChatModel {
           data: null,
           success: false,
           error,
+          actionResult: undefined,
         });
         overallSuccess = false;
         if (!overallError) overallError = error;
@@ -588,6 +638,7 @@ export class BaseChatModel {
           data: null,
           success: false,
           error,
+          actionResult: undefined,
         });
         overallSuccess = false;
         if (!overallError) overallError = error;
@@ -599,10 +650,35 @@ export class BaseChatModel {
         const validationResult = tool.schema.safeParse(parsedArgs);
 
         if (validationResult.success) {
+          let actionResult: any = undefined;
+          
+          // Execute the action if it exists
+          if (tool.action) {
+            try {
+              actionResult = await tool.action(validationResult.data);
+            } catch (actionError: any) {
+              console.error(
+                `Action execution failed for tool '${toolName}'. Error:`,
+                actionError.message
+              );
+              toolCallResults.push({
+                toolName,
+                data: validationResult.data,
+                success: false,
+                error: actionError,
+                actionResult: undefined,
+              });
+              overallSuccess = false;
+              if (!overallError) overallError = actionError;
+              continue;
+            }
+          }
+          
           toolCallResults.push({
             toolName,
             data: validationResult.data,
             success: true,
+            actionResult,
           });
         } else {
           console.error(
@@ -614,6 +690,7 @@ export class BaseChatModel {
             data: null,
             success: false,
             error: validationResult.error,
+            actionResult: undefined,
           });
           overallSuccess = false;
           if (!overallError) overallError = validationResult.error;
@@ -628,6 +705,7 @@ export class BaseChatModel {
           data: null,
           success: false,
           error: e,
+          actionResult: undefined,
         });
         overallSuccess = false;
         if (!overallError) overallError = e;
@@ -643,11 +721,11 @@ export class BaseChatModel {
     };
   }
 
-  private validateMultipleToolsContent(
+  private async validateMultipleToolsContent(
     parsedContent: any,
     tools: StructuredTool[],
     message: OpenAIMessage
-  ): MultipleStructuredToolInput {
+  ): Promise<MultipleStructuredToolInput> {
     // If the content is an array, try to validate each item against available tools
     if (Array.isArray(parsedContent)) {
       const toolCallResults: Array<{
@@ -655,6 +733,7 @@ export class BaseChatModel {
         data: any;
         success: boolean;
         error?: Error | z.ZodError<any>;
+        actionResult?: any;
       }> = [];
 
       let overallSuccess = true;
@@ -668,10 +747,36 @@ export class BaseChatModel {
         for (const tool of tools) {
           const validationResult = tool.schema.safeParse(item);
           if (validationResult.success) {
+            let actionResult: any = undefined;
+            
+            // Execute the action if it exists
+            if (tool.action) {
+              try {
+                actionResult = await tool.action(validationResult.data);
+              } catch (actionError: any) {
+                console.error(
+                  `Action execution failed for tool '${tool.name || `tool_${i}`}'. Error:`,
+                  actionError.message
+                );
+                toolCallResults.push({
+                  toolName: tool.name || `tool_${i}`,
+                  data: validationResult.data,
+                  success: false,
+                  error: actionError,
+                  actionResult: undefined,
+                });
+                overallSuccess = false;
+                if (!overallError) overallError = actionError;
+                validated = true;
+                break;
+              }
+            }
+            
             toolCallResults.push({
               toolName: tool.name || `tool_${i}`,
               data: validationResult.data,
               success: true,
+              actionResult,
             });
             validated = true;
             break;
@@ -687,6 +792,7 @@ export class BaseChatModel {
             data: item,
             success: false,
             error,
+            actionResult: undefined,
           });
           overallSuccess = false;
           if (!overallError) overallError = error;
@@ -705,6 +811,35 @@ export class BaseChatModel {
       for (const tool of tools) {
         const validationResult = tool.schema.safeParse(parsedContent);
         if (validationResult.success) {
+          let actionResult: any = undefined;
+          
+          // Execute the action if it exists
+          if (tool.action) {
+            try {
+              actionResult = await tool.action(validationResult.data);
+            } catch (actionError: any) {
+              console.error(
+                `Action execution failed for tool '${tool.name || "unknown"}'. Error:`,
+                actionError.message
+              );
+              return {
+                success: false,
+                error: actionError,
+                raw: message,
+                data: [],
+                toolCalls: [
+                  {
+                    toolName: tool.name || "unknown",
+                    data: validationResult.data,
+                    success: false,
+                    error: actionError,
+                    actionResult: undefined,
+                  },
+                ],
+              };
+            }
+          }
+          
           return {
             success: true,
             raw: message,
@@ -714,6 +849,7 @@ export class BaseChatModel {
                 toolName: tool.name || "unknown",
                 data: validationResult.data,
                 success: true,
+                actionResult,
               },
             ],
           };
