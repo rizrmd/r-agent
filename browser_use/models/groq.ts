@@ -63,10 +63,7 @@ export class ChatGroqAI extends BaseChatModel {
     let formattedTools: Partial<RequestParams> = {};
     if (tools) {
       const toolArray = Array.isArray(tools) ? tools : [tools];
-      formattedTools = formatTools(toolArray);
-      if (tool_options?.tool_choice) {
-        formattedTools.tool_choice = tool_options.tool_choice;
-      }
+      formattedTools = formatTools(toolArray, tool_options?.tool_choice);
     }
 
     return {

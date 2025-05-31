@@ -245,7 +245,10 @@ type MultipleStructuredToolInput = {
   }>;
 };
 
-export function formatTools(rawTools: StructuredTool[]): {
+export function formatTools(
+  rawTools: StructuredTool[],
+  toolChoice?: RequestParams["tool_choice"]
+): {
   tools?: Array<{
     type: "function";
     function: {
@@ -298,7 +301,8 @@ export function formatTools(rawTools: StructuredTool[]): {
           },
         } as const)
       : undefined;
-  return { tools, tool_choice };
+
+  return { tools, tool_choice: toolChoice || tool_choice || "none" };
 }
 
 export class BaseChatModel {
@@ -329,7 +333,7 @@ export class BaseChatModel {
 
   withTools(
     tools: StructuredTool[],
-    options: { tool_choice?: ToolCallingMethod } = {}
+    options: Parameters<typeof this.formatMessages>[2] = {}
   ) {
     const self = this;
     const toolArray = Array.isArray(tools) ? tools : [tools];
@@ -339,7 +343,7 @@ export class BaseChatModel {
         rawMessages: BaseMessage[]
       ): Promise<T> {
         const message = await self.request(
-          self.formatMessages(rawMessages, tools)
+          self.formatMessages(rawMessages, tools, options)
         );
 
         const messages: OpenAIMessage[] = [message];
