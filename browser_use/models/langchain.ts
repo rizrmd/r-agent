@@ -333,10 +333,9 @@ export class BaseChatModel {
   ) {
     const self = this;
     const toolArray = Array.isArray(tools) ? tools : [tools];
-    const isMultipleTools = Array.isArray(tools);
 
     return {
-      async invoke<T extends MultipleStructuredToolInput>(
+      async invoke<T = OpenAIMessage>(
         rawMessages: BaseMessage[]
       ): Promise<T> {
         const message = await self.request(
@@ -349,70 +348,87 @@ export class BaseChatModel {
           actualToolCalls = message.additional_kwargs.tool_calls;
         }
 
-        if (actualToolCalls || options?.method === "function_calling") {
-          if (isMultipleTools) {
-            return (await self.handleMultipleToolCalls(
-              actualToolCalls,
-              toolArray,
-              message,
-              options
-            )) as T;
-          } else {
-            return (await self.handleSingleToolCall(
-              actualToolCalls?.[0],
-              toolArray[0]!,
-              message,
-              options
-            )) as T;
+        // Execute tool actions if present but don't change the return type
+        if (actualToolCalls && Array.isArray(actualToolCalls)) {
+          const toolMessages: OpenAIMessage[] = [];
+          
+          for (const toolCall of actualToolCalls) {
+            if (toolCall?.function?.arguments) {
+              const toolName = toolCall.function.name;
+              const tool = toolArray.find((t) => t.name === toolName);
+              
+              if (tool) {
+                try {
+                  const parsedArgs = JSON.parse(toolCall.function.arguments);
+                  const validationResult = tool.schema.safeParse(parsedArgs);
+                  
+                  if (validationResult.success && tool.action) {
+                    try {
+                      const actionResult = await tool.action(validationResult.data);
+                      
+                      // Create tool result message
+                      const toolMessage: OpenAIMessage = {
+                        role: "tool",
+                        tool_call_id: toolCall.id,
+                        content: typeof actionResult === 'string' ? actionResult : JSON.stringify(actionResult)
+                      };
+                      toolMessages.push(toolMessage);
+                    } catch (actionError: any) {
+                      console.error(`Action execution failed for tool '${toolName}':`, actionError.message);
+                      
+                      // Create error tool result message
+                      const toolMessage: OpenAIMessage = {
+                        role: "tool",
+                        tool_call_id: toolCall.id,
+                        content: JSON.stringify({ error: actionError.message })
+                      };
+                      toolMessages.push(toolMessage);
+                    }
+                  }
+                } catch (parseError: any) {
+                  console.error(`JSON parse failed for tool '${toolName}':`, parseError.message);
+                  
+                  // Create error tool result message
+                  const toolMessage: OpenAIMessage = {
+                    role: "tool",
+                    tool_call_id: toolCall.id,
+                    content: JSON.stringify({ error: parseError.message })
+                  };
+                  toolMessages.push(toolMessage);
+                }
+              }
+            }
+          }
+          
+          // Add tool messages to the response for potential use
+          if (toolMessages.length > 0) {
+            (message as any).toolMessages = toolMessages;
           }
         }
 
-        // Handle JSON mode or string content parsing
-        if (typeof message.content === "string") {
-          if (isMultipleTools) {
-            // For multiple tools, try to parse as array or single object
-            try {
-              const parsedContent = JSON.parse(message.content);
-              return (await self.validateMultipleToolsContent(
-                parsedContent,
-                toolArray,
-                message
-              )) as T;
-            } catch (e: any) {
-              console.error(
-                "JSON.parse failed for message content. Error:",
-                e.message
-              );
-              console.error(
-                "Content string that failed parsing:",
-                message.content
-              );
-              return { success: false, error: e, raw: message } as T;
+        // Handle JSON mode or string content parsing for tools without function calling
+        else if (typeof message.content === "string" && toolArray.length > 0) {
+          try {
+            const parsedContent = JSON.parse(message.content);
+            
+            // Try to validate against available tools and execute actions
+            for (const tool of toolArray) {
+              const validationResult = tool.schema.safeParse(parsedContent);
+              if (validationResult.success && tool.action) {
+                try {
+                  await tool.action(validationResult.data);
+                  break; // Execute only the first matching tool
+                } catch (actionError: any) {
+                  console.error(`Action execution failed for tool '${tool.name}':`, actionError.message);
+                }
+              }
             }
-          } else {
-            return (await self.handleSingleToolCall(
-              null,
-              toolArray[0]!,
-              message,
-              options,
-              message.content
-            )) as T;
+          } catch (parseError: any) {
+            // Ignore JSON parse errors for content that's not meant to be tool input
           }
-        } else {
-          const errorDetail = isMultipleTools
-            ? "LLM response content is not a string and no tool calls were made/processed for multiple tools."
-            : "LLM response content is not a string and no tool call was made/processed.";
-          console.error(
-            errorDetail,
-            "Raw message:",
-            JSON.stringify(message, null, 2)
-          );
-          return {
-            success: false,
-            error: new Error(errorDetail),
-            raw: message,
-          } as T;
         }
+
+        return message as T;
       },
     };
   }
