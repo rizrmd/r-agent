@@ -207,7 +207,9 @@ export function formatToolCall(
     }
 
     formatted_tool_calls.push({
-      id: tool_call_item.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Ensure id is present
+      id:
+        tool_call_item.id ||
+        `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Ensure id is present
       type: "function",
       function: {
         name: tool_call_item.name,
@@ -281,15 +283,16 @@ export function formatTools(rawTools: StructuredTool[]): {
       },
     });
   }
-  const tool_choice = (rawTools[0]?.name && typeof rawTools[0].name === 'string')
-    ? ({
-        // Added check for rawTools[0].name
-        type: "function" as const,
-        function: {
-          name: rawTools[0].name,
-        },
-      } as const)
-    : undefined;
+  const tool_choice =
+    rawTools[0]?.name && typeof rawTools[0].name === "string"
+      ? ({
+          // Added check for rawTools[0].name
+          type: "function" as const,
+          function: {
+            name: rawTools[0].name,
+          },
+        } as const)
+      : undefined;
   return { tools, tool_choice };
 }
 
@@ -317,15 +320,15 @@ export class BaseChatModel {
   }
 
   withTools(
-    tools: StructuredTool | StructuredTool[],
+    tools: StructuredTool[],
     options: { includeRaw?: boolean; method?: ToolCallingMethod } = {}
   ) {
     const self = this;
     const toolArray = Array.isArray(tools) ? tools : [tools];
     const isMultipleTools = Array.isArray(tools);
-    
+
     return {
-      async invoke<T extends StructuredToolInput | MultipleStructuredToolInput>(
+      async invoke<T extends MultipleStructuredToolInput>(
         rawMessages: BaseMessage[]
       ): Promise<T> {
         const message = await self.request(
@@ -340,9 +343,19 @@ export class BaseChatModel {
 
         if (actualToolCalls || options?.method === "function_calling") {
           if (isMultipleTools) {
-            return self.handleMultipleToolCalls(actualToolCalls, toolArray, message, options) as T;
+            return self.handleMultipleToolCalls(
+              actualToolCalls,
+              toolArray,
+              message,
+              options
+            ) as T;
           } else {
-            return self.handleSingleToolCall(actualToolCalls?.[0], toolArray[0]!, message, options) as T;
+            return self.handleSingleToolCall(
+              actualToolCalls?.[0],
+              toolArray[0]!,
+              message,
+              options
+            ) as T;
           }
         }
 
@@ -352,20 +365,40 @@ export class BaseChatModel {
             // For multiple tools, try to parse as array or single object
             try {
               const parsedContent = JSON.parse(message.content);
-              return self.validateMultipleToolsContent(parsedContent, toolArray, message) as T;
+              return self.validateMultipleToolsContent(
+                parsedContent,
+                toolArray,
+                message
+              ) as T;
             } catch (e: any) {
-              console.error("JSON.parse failed for message content. Error:", e.message);
-              console.error("Content string that failed parsing:", message.content);
+              console.error(
+                "JSON.parse failed for message content. Error:",
+                e.message
+              );
+              console.error(
+                "Content string that failed parsing:",
+                message.content
+              );
               return { success: false, error: e, raw: message } as T;
             }
           } else {
-            return self.handleSingleToolCall(null, toolArray[0]!, message, options, message.content) as T;
+            return self.handleSingleToolCall(
+              null,
+              toolArray[0]!,
+              message,
+              options,
+              message.content
+            ) as T;
           }
         } else {
           const errorDetail = isMultipleTools
             ? "LLM response content is not a string and no tool calls were made/processed for multiple tools."
             : "LLM response content is not a string and no tool call was made/processed.";
-          console.error(errorDetail, "Raw message:", JSON.stringify(message, null, 2));
+          console.error(
+            errorDetail,
+            "Raw message:",
+            JSON.stringify(message, null, 2)
+          );
           return {
             success: false,
             error: new Error(errorDetail),
@@ -466,10 +499,7 @@ export class BaseChatModel {
           "JSON.parse failed for message content. Error:",
           e.message
         );
-        console.error(
-          "Content string that failed parsing:",
-          contentString
-        );
+        console.error("Content string that failed parsing:", contentString);
         return { success: false, error: e, raw: message };
       }
     } else {
@@ -494,9 +524,18 @@ export class BaseChatModel {
     message: OpenAIMessage,
     options: { includeRaw?: boolean; method?: ToolCallingMethod }
   ): MultipleStructuredToolInput {
-    if (!actualToolCalls || !Array.isArray(actualToolCalls) || actualToolCalls.length === 0) {
-      const errorDetail = "No tool calls found in LLM response for multiple tools.";
-      console.error(errorDetail, "Raw message:", JSON.stringify(message, null, 2));
+    if (
+      !actualToolCalls ||
+      !Array.isArray(actualToolCalls) ||
+      actualToolCalls.length === 0
+    ) {
+      const errorDetail =
+        "No tool calls found in LLM response for multiple tools.";
+      console.error(
+        errorDetail,
+        "Raw message:",
+        JSON.stringify(message, null, 2)
+      );
       return {
         success: false,
         error: new Error(errorDetail),
@@ -516,10 +555,18 @@ export class BaseChatModel {
     let overallError: Error | z.ZodError<any> | undefined;
 
     for (const toolCall of actualToolCalls) {
-      if (!toolCall || !toolCall.function || typeof toolCall.function.arguments !== "string") {
-        const error = new Error(`Tool call or function arguments missing/invalid: ${toolCall?.function?.name || 'unknown'}`);
+      if (
+        !toolCall ||
+        !toolCall.function ||
+        typeof toolCall.function.arguments !== "string"
+      ) {
+        const error = new Error(
+          `Tool call or function arguments missing/invalid: ${
+            toolCall?.function?.name || "unknown"
+          }`
+        );
         toolCallResults.push({
-          toolName: toolCall?.function?.name || 'unknown',
+          toolName: toolCall?.function?.name || "unknown",
           data: null,
           success: false,
           error,
@@ -530,10 +577,12 @@ export class BaseChatModel {
       }
 
       const toolName = toolCall.function.name;
-      const tool = tools.find(t => t.name === toolName);
-      
+      const tool = tools.find((t) => t.name === toolName);
+
       if (!tool) {
-        const error = new Error(`Tool '${toolName}' not found in provided tools`);
+        const error = new Error(
+          `Tool '${toolName}' not found in provided tools`
+        );
         toolCallResults.push({
           toolName,
           data: null,
@@ -548,7 +597,7 @@ export class BaseChatModel {
       try {
         const parsedArgs = JSON.parse(toolCall.function.arguments);
         const validationResult = tool.schema.safeParse(parsedArgs);
-        
+
         if (validationResult.success) {
           toolCallResults.push({
             toolName,
@@ -589,7 +638,7 @@ export class BaseChatModel {
       success: overallSuccess,
       error: overallError,
       raw: message,
-      data: toolCallResults.map(result => result.data),
+      data: toolCallResults.map((result) => result.data),
       toolCalls: toolCallResults,
     };
   }
@@ -630,7 +679,9 @@ export class BaseChatModel {
         }
 
         if (!validated) {
-          const error = new Error(`Could not validate item ${i} against any provided tool schema`);
+          const error = new Error(
+            `Could not validate item ${i} against any provided tool schema`
+          );
           toolCallResults.push({
             toolName: `unknown_${i}`,
             data: item,
@@ -646,7 +697,7 @@ export class BaseChatModel {
         success: overallSuccess,
         error: overallError,
         raw: message,
-        data: toolCallResults.map(result => result.data),
+        data: toolCallResults.map((result) => result.data),
         toolCalls: toolCallResults,
       };
     } else {
@@ -658,16 +709,20 @@ export class BaseChatModel {
             success: true,
             raw: message,
             data: [validationResult.data],
-            toolCalls: [{
-              toolName: tool.name || 'unknown',
-              data: validationResult.data,
-              success: true,
-            }],
+            toolCalls: [
+              {
+                toolName: tool.name || "unknown",
+                data: validationResult.data,
+                success: true,
+              },
+            ],
           };
         }
       }
 
-      const error = new Error("Could not validate content against any provided tool schema");
+      const error = new Error(
+        "Could not validate content against any provided tool schema"
+      );
       console.error(
         "Content validation failed for all tools. Content:",
         JSON.stringify(parsedContent, null, 2)

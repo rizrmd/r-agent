@@ -46,13 +46,17 @@ const timeTool = new StructuredTool({
 // Mock tool execution functions
 function executeCalculation(operation: string, a: number, b: number): number {
   switch (operation) {
-    case "add": return a + b;
-    case "subtract": return a - b;
-    case "multiply": return a * b;
-    case "divide": 
+    case "add":
+      return a + b;
+    case "subtract":
+      return a - b;
+    case "multiply":
+      return a * b;
+    case "divide":
       if (b === 0) throw new Error("Division by zero");
       return a / b;
-    default: throw new Error("Unknown operation: " + operation);
+    default:
+      throw new Error("Unknown operation: " + operation);
   }
 }
 
@@ -71,62 +75,37 @@ const llm = new ChatGroqAI({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-async function testSingleTool() {
-  console.log("\n=== Testing Single Tool Usage ===");
-  
-  const singleToolLLM = llm.withTools(calculatorTool, { method: "auto" });
-  
-  const messages = [
-    new SystemMessage({
-      content: "You are a calculator assistant. Use the calculator tool to perform calculations.",
-    }),
-    new HumanMessage({
-      content: "Calculate 15 + 25",
-    }),
-  ];
-
-  try {
-    const response = await singleToolLLM.invoke(messages);
-    console.log("Single tool response:", response);
-    
-    if (response.success) {
-      const result = executeCalculation(
-        response.data.operation,
-        response.data.a,
-        response.data.b
-      );
-      console.log(`✓ Single tool test passed: ${response.data.a} ${response.data.operation} ${response.data.b} = ${result}`);
-    } else {
-      console.error("✗ Single tool test failed:", response.error);
-    }
-  } catch (error) {
-    console.error("✗ Single tool test error:", error);
-  }
-}
-
 async function testMultipleTools() {
   console.log("\n=== Testing Multiple Tools Usage ===");
-  
-  const multiToolLLM = llm.withTools([calculatorTool, weatherTool, timeTool], { method: "auto" });
-  
+
+  const multiToolLLM = llm.withTools([calculatorTool, weatherTool, timeTool], {
+    method: "auto",
+  });
+
   const messages = [
     new SystemMessage({
-      content: "You are a helpful assistant with access to calculator, weather, and time tools. Use the appropriate tools to answer questions.",
+      content:
+        "You are a helpful assistant with access to calculator, weather, and time tools. Use the appropriate tools to answer questions.",
     }),
     new HumanMessage({
-      content: "Calculate 10 * 5, get weather for New York, and tell me the current time in UTC",
+      content:
+        "Calculate 10 * 5, get weather for New York, and tell me the current time in UTC",
     }),
   ];
 
   try {
     const response = await multiToolLLM.invoke(messages);
     console.log("Multiple tools response:", JSON.stringify(response, null, 2));
-    
-    if (response.success && response.toolCalls) {
-      console.log(`✓ Multiple tools test: received ${response.toolCalls.length} tool calls`);
-      
+
+    if (response.success && "toolCalls" in response && response.toolCalls) {
+      console.log(
+        `✓ Multiple tools test: received ${response.toolCalls.length} tool calls`
+      );
+
       for (const toolCall of response.toolCalls) {
-        console.log(`  - Tool: ${toolCall.toolName}, Success: ${toolCall.success}`);
+        console.log(
+          `  - Tool: ${toolCall.toolName}, Success: ${toolCall.success}`
+        );
         if (toolCall.success) {
           switch (toolCall.toolName) {
             case "calculator":
@@ -138,11 +117,17 @@ async function testMultipleTools() {
               console.log(`    Calculator result: ${calcResult}`);
               break;
             case "weather":
-              const weather = getWeather(toolCall.data.location, toolCall.data.units || "celsius");
+              const weather = getWeather(
+                toolCall.data.location,
+                toolCall.data.units || "celsius"
+              );
               console.log(`    Weather result: ${weather}`);
               break;
             case "time":
-              const time = getTime(toolCall.data.timezone || "UTC", toolCall.data.format || "24");
+              const time = getTime(
+                toolCall.data.timezone || "UTC",
+                toolCall.data.format || "24"
+              );
               console.log(`    Time result: ${time}`);
               break;
           }
@@ -160,10 +145,10 @@ async function testMultipleTools() {
 
 async function testMixedScenarios() {
   console.log("\n=== Testing Edge Cases ===");
-  
+
   // Test with array containing single tool (should work like single tool)
   const singleInArrayLLM = llm.withTools([calculatorTool], { method: "auto" });
-  
+
   const messages = [
     new SystemMessage({
       content: "Use the calculator tool for arithmetic.",
@@ -176,7 +161,7 @@ async function testMixedScenarios() {
   try {
     const response = await singleInArrayLLM.invoke(messages);
     console.log("Single tool in array response:", response);
-    
+
     if (response.success) {
       console.log("✓ Single tool in array test passed");
     } else {
@@ -190,11 +175,10 @@ async function testMixedScenarios() {
 // Run all tests
 async function runTests() {
   console.log("Running Multiple Tools Tests...");
-  
-  await testSingleTool();
+
   await testMultipleTools();
   await testMixedScenarios();
-  
+
   console.log("\n=== Tests Complete ===");
 }
 
@@ -204,7 +188,6 @@ if (require.main === module) {
 }
 
 export {
-  testSingleTool,
   testMultipleTools,
   testMixedScenarios,
   calculatorTool,
