@@ -101,9 +101,6 @@ export class StructuredTool {
     this.schema = data.schema;
     this.action = data.action;
   }
-  
-
-  
 }
 
 export class BaseMessage implements Message {
@@ -317,7 +314,10 @@ export class BaseChatModel {
 
   formatMessages(
     messages: BaseMessage[],
-    tools?: StructuredTool | StructuredTool[]
+    tools?: StructuredTool | StructuredTool[],
+    tool_options?: {
+      tool_choice?: RequestParams["tool_choice"];
+    }
   ): RequestParams {
     return { messages };
   }
@@ -329,7 +329,7 @@ export class BaseChatModel {
 
   withTools(
     tools: StructuredTool[],
-    options: { includeRaw?: boolean; method?: ToolCallingMethod } = {}
+    options: { tool_choice?: ToolCallingMethod } = {}
   ) {
     const self = this;
     const toolArray = Array.isArray(tools) ? tools : [tools];
@@ -356,43 +356,54 @@ export class BaseChatModel {
             if (toolCall?.function?.arguments) {
               const toolName = toolCall.function.name;
               const tool = toolArray.find((t) => t.name === toolName);
-              
+
               if (tool) {
                 try {
                   const parsedArgs = JSON.parse(toolCall.function.arguments);
                   const validationResult = tool.schema.safeParse(parsedArgs);
-                  
+
                   if (validationResult.success && tool.action) {
                     try {
-                      const actionResult = await tool.action(validationResult.data);
-                      
+                      const actionResult = await tool.action(
+                        validationResult.data
+                      );
+
                       // Create tool result message
                       const toolMessage: OpenAIMessage = {
                         role: "tool",
                         tool_call_id: toolCall.id,
-                        content: typeof actionResult === 'string' ? actionResult : JSON.stringify(actionResult)
+                        content:
+                          typeof actionResult === "string"
+                            ? actionResult
+                            : JSON.stringify(actionResult),
                       };
                       messages.push(toolMessage);
                     } catch (actionError: any) {
-                      console.error(`Action execution failed for tool '${toolName}':`, actionError.message);
-                      
+                      console.error(
+                        `Action execution failed for tool '${toolName}':`,
+                        actionError.message
+                      );
+
                       // Create error tool result message
                       const toolMessage: OpenAIMessage = {
                         role: "tool",
                         tool_call_id: toolCall.id,
-                        content: JSON.stringify({ error: actionError.message })
+                        content: JSON.stringify({ error: actionError.message }),
                       };
                       messages.push(toolMessage);
                     }
                   }
                 } catch (parseError: any) {
-                  console.error(`JSON parse failed for tool '${toolName}':`, parseError.message);
-                  
+                  console.error(
+                    `JSON parse failed for tool '${toolName}':`,
+                    parseError.message
+                  );
+
                   // Create error tool result message
                   const toolMessage: OpenAIMessage = {
                     role: "tool",
                     tool_call_id: toolCall.id,
-                    content: JSON.stringify({ error: parseError.message })
+                    content: JSON.stringify({ error: parseError.message }),
                   };
                   messages.push(toolMessage);
                 }
@@ -405,7 +416,7 @@ export class BaseChatModel {
         else if (typeof message.content === "string" && toolArray.length > 0) {
           try {
             const parsedContent = JSON.parse(message.content);
-            
+
             // Try to validate against available tools and execute actions
             for (const tool of toolArray) {
               const validationResult = tool.schema.safeParse(parsedContent);
@@ -414,7 +425,10 @@ export class BaseChatModel {
                   await tool.action(validationResult.data);
                   break; // Execute only the first matching tool
                 } catch (actionError: any) {
-                  console.error(`Action execution failed for tool '${tool.name}':`, actionError.message);
+                  console.error(
+                    `Action execution failed for tool '${tool.name}':`,
+                    actionError.message
+                  );
                 }
               }
             }
@@ -461,7 +475,7 @@ export class BaseChatModel {
         const validationResult = tool.schema.safeParse(parsedArgs);
         if (validationResult.success) {
           let actionResult: any = undefined;
-          
+
           // Execute the action if it exists
           if (tool.action) {
             try {
@@ -478,7 +492,7 @@ export class BaseChatModel {
               };
             }
           }
-          
+
           return {
             success: true,
             data: validationResult.data,
@@ -515,7 +529,7 @@ export class BaseChatModel {
         const validationResult = tool.schema.safeParse(parsedContent);
         if (validationResult.success) {
           let actionResult: any = undefined;
-          
+
           // Execute the action if it exists
           if (tool.action) {
             try {
@@ -532,7 +546,7 @@ export class BaseChatModel {
               };
             }
           }
-          
+
           return {
             success: true,
             data: validationResult.data,
@@ -663,7 +677,7 @@ export class BaseChatModel {
 
         if (validationResult.success) {
           let actionResult: any = undefined;
-          
+
           // Execute the action if it exists
           if (tool.action) {
             try {
@@ -685,7 +699,7 @@ export class BaseChatModel {
               continue;
             }
           }
-          
+
           toolCallResults.push({
             toolName,
             data: validationResult.data,
@@ -760,14 +774,16 @@ export class BaseChatModel {
           const validationResult = tool.schema.safeParse(item);
           if (validationResult.success) {
             let actionResult: any = undefined;
-            
+
             // Execute the action if it exists
             if (tool.action) {
               try {
                 actionResult = await tool.action(validationResult.data);
               } catch (actionError: any) {
                 console.error(
-                  `Action execution failed for tool '${tool.name || `tool_${i}`}'. Error:`,
+                  `Action execution failed for tool '${
+                    tool.name || `tool_${i}`
+                  }'. Error:`,
                   actionError.message
                 );
                 toolCallResults.push({
@@ -783,7 +799,7 @@ export class BaseChatModel {
                 break;
               }
             }
-            
+
             toolCallResults.push({
               toolName: tool.name || `tool_${i}`,
               data: validationResult.data,
@@ -824,14 +840,16 @@ export class BaseChatModel {
         const validationResult = tool.schema.safeParse(parsedContent);
         if (validationResult.success) {
           let actionResult: any = undefined;
-          
+
           // Execute the action if it exists
           if (tool.action) {
             try {
               actionResult = await tool.action(validationResult.data);
             } catch (actionError: any) {
               console.error(
-                `Action execution failed for tool '${tool.name || "unknown"}'. Error:`,
+                `Action execution failed for tool '${
+                  tool.name || "unknown"
+                }'. Error:`,
                 actionError.message
               );
               return {
@@ -851,7 +869,7 @@ export class BaseChatModel {
               };
             }
           }
-          
+
           return {
             success: true,
             raw: message,

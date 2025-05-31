@@ -48,7 +48,7 @@ const llm = new ChatGroqAI({
 
 // Create a structured output handler
 const structuredLLM = llm.withTools(calculatorTool, {
-  method: "auto",
+  tool_choice: "auto",
 });
 
 // Example conversation

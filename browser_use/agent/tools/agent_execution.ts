@@ -102,7 +102,7 @@ export async function executeGetNextAction(
       createAgentOutputToolInternal(agentOutputSchema),
       {
         includeRaw: true,
-        method: toolCallingMethod,
+        tool_choice: toolCallingMethod,
       }
     );
     if (logger.isDebugEnabled()) {

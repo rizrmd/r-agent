@@ -1,14 +1,15 @@
 import { existsSync, mkdirSync } from "fs";
+import { join } from "path";
+import { ToolCallingMethod } from "../agent/views";
 import {
   BaseChatModel,
   BaseMessage,
   formatToolCall,
   formatTools,
+  OpenAIMessage,
   RequestParams,
   StructuredTool,
-  OpenAIMessage,
 } from "./langchain";
-import { join } from "path";
 import { cleanStringField } from "./response_parser";
 
 export class ChatGroqAI extends BaseChatModel {
@@ -33,7 +34,8 @@ export class ChatGroqAI extends BaseChatModel {
 
   formatMessages(
     rawMessages: BaseMessage[],
-    tools?: StructuredTool | StructuredTool[]
+    tools?: StructuredTool | StructuredTool[],
+    tool_options?: { tool_choice?: RequestParams["tool_choice"] }
   ): RequestParams {
     const messages: any[] = [];
     for (const m of rawMessages) {
@@ -58,13 +60,19 @@ export class ChatGroqAI extends BaseChatModel {
     }
 
     // Handle both single tool and multiple tools
-    let formattedTools = {};
+    let formattedTools: Partial<RequestParams> = {};
     if (tools) {
       const toolArray = Array.isArray(tools) ? tools : [tools];
       formattedTools = formatTools(toolArray);
+      if (tool_options?.tool_choice) {
+        formattedTools.tool_choice = tool_options.tool_choice;
+      }
     }
 
-    return { messages, ...formattedTools };
+    return {
+      messages,
+      ...formattedTools,
+    };
   }
 
   async request(params: RequestParams): Promise<OpenAIMessage> {
@@ -177,23 +185,35 @@ export class ChatGroqAI extends BaseChatModel {
 
     // Clean message.content
     if (message.content) {
-      if (typeof message.content === 'string') {
+      if (typeof message.content === "string") {
         message.content = cleanStringField(message.content);
       } else if (Array.isArray(message.content)) {
-        message.content = message.content.map((block: { type: string; text?: string; [key: string]: any; }) => {
-          if (block && block.type === 'text' && typeof block.text === 'string') {
-            return { ...block, text: cleanStringField(block.text) };
+        message.content = message.content.map(
+          (block: { type: string; text?: string; [key: string]: any }) => {
+            if (
+              block &&
+              block.type === "text" &&
+              typeof block.text === "string"
+            ) {
+              return { ...block, text: cleanStringField(block.text) };
+            }
+            return block;
           }
-          return block;
-        });
+        );
       }
     }
 
     // Clean message.tool_calls arguments if present
     if (message.tool_calls && Array.isArray(message.tool_calls)) {
       for (const toolCall of message.tool_calls) {
-        if (toolCall.function && toolCall.function.arguments && typeof toolCall.function.arguments === 'string') {
-          toolCall.function.arguments = cleanStringField(toolCall.function.arguments);
+        if (
+          toolCall.function &&
+          toolCall.function.arguments &&
+          typeof toolCall.function.arguments === "string"
+        ) {
+          toolCall.function.arguments = cleanStringField(
+            toolCall.function.arguments
+          );
         }
       }
     }

@@ -79,7 +79,7 @@ async function testMultipleTools() {
   console.log("\n=== Testing Multiple Tools Usage ===");
 
   const multiToolLLM = llm.withTools([calculatorTool, weatherTool, timeTool], {
-    method: "auto",
+    tool_choice: "auto",
   });
 
   const messages = [
@@ -147,7 +147,7 @@ async function testMixedScenarios() {
   console.log("\n=== Testing Edge Cases ===");
 
   // Test with array containing single tool (should work like single tool)
-  const singleInArrayLLM = llm.withTools([calculatorTool], { method: "auto" });
+  const singleInArrayLLM = llm.withTools([calculatorTool], { tool_choice: "auto" });
 
   const messages = [
     new SystemMessage({
