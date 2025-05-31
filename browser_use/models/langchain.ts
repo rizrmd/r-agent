@@ -9,6 +9,55 @@ type ToolCallingMethod =
   | null
   | undefined;
 
+// OpenAI-compatible API response interfaces
+export interface OpenAIFunctionCall {
+  name: string;
+  arguments: string;
+}
+
+export interface OpenAIToolCall {
+  id: string;
+  type: "function";
+  function: OpenAIFunctionCall;
+}
+
+export interface OpenAIMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | Content[] | null;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+  // For backward compatibility with existing code
+  additional_kwargs?: {
+    tool_calls?: Array<{
+      name: string;
+      args: any;
+      id?: string;
+      type?: string;
+    }>;
+  };
+}
+
+export interface OpenAIChoice {
+  index: number;
+  message: OpenAIMessage;
+  finish_reason?: string;
+}
+
+export interface OpenAIUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
+export interface OpenAIResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: OpenAIChoice[];
+  usage?: OpenAIUsage;
+}
+
 export interface Content {
   type: "text" | "image_url";
   text?: string;
@@ -104,8 +153,24 @@ export class ToolMessage extends BaseMessage {
 }
 
 export interface RequestParams {
-  tools?: any[];
-  tool_choice?: any;
+  tools?: Array<{
+    type: "function";
+    function: {
+      name: string;
+      description?: string;
+      parameters: Record<string, any>;
+    };
+  }>;
+  tool_choice?:
+    | "none"
+    | "auto"
+    | "required"
+    | {
+        type: "function";
+        function: {
+          name: string;
+        };
+      };
   model?: string;
   messages: any[];
   provider?: {
@@ -116,11 +181,11 @@ export interface RequestParams {
 
 export function formatToolCall(
   additional: Message["additional_kwargs"]
-): any[] | undefined {
+): OpenAIToolCall[] | undefined {
   if (!additional?.tool_calls) {
     return undefined;
   }
-  const formatted_tool_calls: any[] = [];
+  const formatted_tool_calls: OpenAIToolCall[] = [];
   for (const tool_call_item of additional.tool_calls) {
     let args_string: string;
 
@@ -142,7 +207,7 @@ export function formatToolCall(
     }
 
     formatted_tool_calls.push({
-      id: tool_call_item.id, // Ensure id is present
+      id: tool_call_item.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Ensure id is present
       type: "function",
       function: {
         name: tool_call_item.name,
@@ -153,15 +218,46 @@ export function formatToolCall(
   return formatted_tool_calls;
 }
 
+type StructuredToolInput = {
+  success: boolean;
+  error?: Error | z.ZodError<any>;
+  raw: OpenAIMessage;
+  data?: z.infer<StructuredTool["schema"]>;
+};
+
 export function formatTools(rawTools: StructuredTool[]): {
-  tools?: any[];
-  tool_choice?: any;
+  tools?: Array<{
+    type: "function";
+    function: {
+      name: string;
+      description?: string;
+      parameters: Record<string, any>;
+    };
+  }>;
+  tool_choice?:
+    | "none"
+    | "auto"
+    | "required"
+    | {
+        type: "function";
+        function: {
+          name: string;
+        };
+      };
 } {
   if (!rawTools?.length) {
     return {};
   }
-  const tools: any[] = [];
+  const tools: Array<{
+    type: "function";
+    function: {
+      name: string;
+      description?: string;
+      parameters: Record<string, any>;
+    };
+  }> = [];
   for (const tool of rawTools) {
+    if (!tool.name) continue; // Skip tools without names
     const jsonschema = zodToJsonSchema(tool.schema);
     tools.push({
       type: "function",
@@ -172,14 +268,14 @@ export function formatTools(rawTools: StructuredTool[]): {
       },
     });
   }
-  const tool_choice = rawTools[0]?.name
-    ? {
+  const tool_choice = (rawTools[0]?.name && typeof rawTools[0].name === 'string')
+    ? ({
         // Added check for rawTools[0].name
-        type: "function",
+        type: "function" as const,
         function: {
           name: rawTools[0].name,
         },
-      }
+      } as const)
     : undefined;
   return { tools, tool_choice };
 }
@@ -191,7 +287,7 @@ export class BaseChatModel {
     this.model_name = model_name;
   }
 
-  request(params: RequestParams): Promise<any> {
+  request(params: RequestParams): Promise<OpenAIMessage> {
     throw new Error("Not implemented");
   }
 
@@ -202,7 +298,7 @@ export class BaseChatModel {
     return { messages };
   }
 
-  async invoke<T = any>(rawMessages: BaseMessage[]): Promise<T> {
+  async invoke<T = OpenAIMessage>(rawMessages: BaseMessage[]): Promise<T> {
     const result = await this.request(this.formatMessages(rawMessages));
     return result as T;
   }
@@ -213,20 +309,15 @@ export class BaseChatModel {
   ) {
     const self = this;
     return {
-      async invoke<
-        T extends {
-          success: boolean;
-          error?: Error | z.ZodError<any>;
-          raw: any;
-          data?: z.infer<StructuredTool["schema"]>;
-        }
-      >(rawMessages: BaseMessage[]): Promise<T> {
+      async invoke<T extends StructuredToolInput>(
+        rawMessages: BaseMessage[]
+      ): Promise<T> {
         const message = await self.request(
           self.formatMessages(rawMessages, tool)
         );
 
         // Check for tool calls, potentially nested in additional_kwargs
-        let actualToolCalls = message.tool_calls;
+        let actualToolCalls: any = message.tool_calls;
         if (!actualToolCalls && message.additional_kwargs?.tool_calls) {
           actualToolCalls = message.additional_kwargs.tool_calls;
         }

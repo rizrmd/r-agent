@@ -7,6 +7,7 @@ import {
   formatTools,
   RequestParams,
   StructuredTool,
+  OpenAIMessage,
 } from "./langchain";
 import { cleanStringField } from "./response_parser";
 
@@ -58,7 +59,7 @@ export class ChatOpenRouterAI extends BaseChatModel {
     return { messages, ...(tool ? formatTools([tool]) : {}) };
   }
 
-  async request(params: RequestParams) {
+  async request(params: RequestParams): Promise<OpenAIMessage> {
     const url = `${this.baseUrl}/chat/completions`;
     const auth = `Bearer ${this.apiKey}`;
     const headers = {

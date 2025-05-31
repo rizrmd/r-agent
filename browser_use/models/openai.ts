@@ -1,4 +1,4 @@
-import { BaseChatModel, BaseMessage, formatToolCall, formatTools, RequestParams, StructuredTool } from "./langchain";
+import { BaseChatModel, BaseMessage, formatToolCall, formatTools, RequestParams, StructuredTool, OpenAIMessage } from "./langchain";
 
 export class ChatOpenAI extends BaseChatModel {
     timeout?: number;
@@ -48,7 +48,7 @@ export class ChatOpenAI extends BaseChatModel {
         return {messages, ...(tool ? formatTools([tool]):{})};
     }
 
-    async request(params: RequestParams) {
+    async request(params: RequestParams): Promise<OpenAIMessage> {
         const url = `${this.baseUrl}/chat/completions`;
         const auth = `Bearer ${this.apiKey}`;
         const headers = {

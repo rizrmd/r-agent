@@ -7,7 +7,7 @@ export { Controller } from "./controller/service";
 export { Browser } from "./browser/browser";
 export type { BrowserConfig } from "./browser/browser";
 export { BrowserContext, BrowserContextConfig } from "./browser/context";
-export type { Message } from "./models/langchain";
+export type { Message, OpenAIMessage, OpenAIResponse, OpenAIToolCall, OpenAIFunctionCall } from "./models/langchain";
 export {
   BaseChatModel,
   BaseMessage,
@@ -18,5 +18,6 @@ export {
 } from "./models/langchain";
 export { ChatOpenAI } from "./models/openai";
 export { ChatGroqAI } from "./models/groq";
+export { ChatGeminiAI } from "./models/gemini";
 export { ChatOpenRouterAI } from "./models/openrouter";
 export { ChatOllama } from "./models/ollama";

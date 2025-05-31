@@ -4,6 +4,7 @@ import {
   Message,
   RequestParams,
   StructuredTool,
+  OpenAIMessage,
 } from "./langchain";
 import { formatTools } from "./langchain";
 
@@ -134,7 +135,7 @@ export class ChatOllama extends BaseChatModel {
     return { messages, ...formatedTools };
   }
 
-  async request(params: RequestParams) {
+  async request(params: RequestParams): Promise<OpenAIMessage> {
     const url = `${this.baseUrl}/api/chat`;
     const headers = {
       "Content-Type": "application/json",
