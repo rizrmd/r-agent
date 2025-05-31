@@ -14,6 +14,7 @@ export {
   HumanMessage,
   AIMessage,
   SystemMessage,
+  StructuredTool,
   ToolMessage,
 } from "./models/langchain";
 export { ChatOpenAI } from "./models/openai";
