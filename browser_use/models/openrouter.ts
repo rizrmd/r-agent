@@ -150,7 +150,7 @@ export class ChatOpenRouterAI extends BaseChatModel {
       ).write(JSON.stringify(logData, null, 2));
 
       console.error(
-        `Groq API Error: ${response.status} ${response.statusText}`,
+        `OpenRouter API Error: ${response.status} ${response.statusText}`,
         errorBody,
         parsedFailedGeneration
           ? `Parsed failed_generation: ${JSON.stringify(
@@ -159,7 +159,7 @@ export class ChatOpenRouterAI extends BaseChatModel {
           : ""
       );
       throw new Error(
-        `Groq API request failed with status ${response.status}: ${errorBody}`
+        `OpenRouter API request failed with status ${response.status}: ${errorBody}`
       );
     }
 
@@ -174,8 +174,8 @@ export class ChatOpenRouterAI extends BaseChatModel {
       join(process.cwd(), "logs", Date.now().toString()) + ".log.json"
     ).write(JSON.stringify(logData, null, 2));
     if (!responseData.choices || responseData.choices.length === 0) {
-      console.error("Groq API Error: No choices returned", responseData);
-      throw new Error("Groq API request returned no choices.");
+      console.error("OpenRouter API Error: No choices returned", responseData);
+      throw new Error("OpenRouter API request returned no choices.");
     }
     const message = responseData.choices[0].message;
 
