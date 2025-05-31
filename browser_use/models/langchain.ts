@@ -335,12 +335,14 @@ export class BaseChatModel {
     const toolArray = Array.isArray(tools) ? tools : [tools];
 
     return {
-      async invoke<T = OpenAIMessage>(
+      async invoke<T = OpenAIMessage | OpenAIMessage[]>(
         rawMessages: BaseMessage[]
       ): Promise<T> {
         const message = await self.request(
           self.formatMessages(rawMessages, tools)
         );
+
+        const messages: OpenAIMessage[] = [message];
 
         // Check for tool calls, potentially nested in additional_kwargs
         let actualToolCalls: any = message.tool_calls;
@@ -348,10 +350,8 @@ export class BaseChatModel {
           actualToolCalls = message.additional_kwargs.tool_calls;
         }
 
-        // Execute tool actions if present but don't change the return type
+        // Execute tool actions if present and create tool result messages
         if (actualToolCalls && Array.isArray(actualToolCalls)) {
-          const toolMessages: OpenAIMessage[] = [];
-          
           for (const toolCall of actualToolCalls) {
             if (toolCall?.function?.arguments) {
               const toolName = toolCall.function.name;
@@ -372,7 +372,7 @@ export class BaseChatModel {
                         tool_call_id: toolCall.id,
                         content: typeof actionResult === 'string' ? actionResult : JSON.stringify(actionResult)
                       };
-                      toolMessages.push(toolMessage);
+                      messages.push(toolMessage);
                     } catch (actionError: any) {
                       console.error(`Action execution failed for tool '${toolName}':`, actionError.message);
                       
@@ -382,7 +382,7 @@ export class BaseChatModel {
                         tool_call_id: toolCall.id,
                         content: JSON.stringify({ error: actionError.message })
                       };
-                      toolMessages.push(toolMessage);
+                      messages.push(toolMessage);
                     }
                   }
                 } catch (parseError: any) {
@@ -394,15 +394,10 @@ export class BaseChatModel {
                     tool_call_id: toolCall.id,
                     content: JSON.stringify({ error: parseError.message })
                   };
-                  toolMessages.push(toolMessage);
+                  messages.push(toolMessage);
                 }
               }
             }
-          }
-          
-          // Add tool messages to the response for potential use
-          if (toolMessages.length > 0) {
-            (message as any).toolMessages = toolMessages;
           }
         }
 
@@ -428,7 +423,8 @@ export class BaseChatModel {
           }
         }
 
-        return message as T;
+        // Return single message if no tool calls, or array of messages if tool calls were made
+        return (messages.length === 1 ? messages[0] : messages) as T;
       },
     };
   }
